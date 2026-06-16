@@ -9,7 +9,7 @@ pick,round,team_name,members,country
 8,2,Butt Buddies,Jackson & Jacob,Netherlands
 9,3,Butt Buddies,Jackson & Jacob,Belgium
 10,3,Jolm,Jed & Colm,Morocco
-11,3,Bomb Squad,Preston & Jack,Columbia
+11,3,Bomb Squad,Preston & Jack,Colombia
 12,3,Ballzach,Eric and Zach,Croatia
 13,4,Ballzach,Eric and Zach,Senegal
 14,4,Bomb Squad,Preston & Jack,Uruguay
@@ -21,7 +21,7 @@ pick,round,team_name,members,country
 20,5,Ballzach,Eric and Zach,Japan
 21,6,Ballzach,Eric and Zach,South Korea
 22,6,Bomb Squad,Preston & Jack,Austria
-23,6,Jolm,Jed & Colm,Turkey
+23,6,Jolm,Jed & Colm,Türkiye
 24,6,Butt Buddies,Jackson & Jacob,Canada
 25,7,Butt Buddies,Jackson & Jacob,Egypt
 26,7,Jolm,Jed & Colm,Algeria
@@ -32,12 +32,12 @@ pick,round,team_name,members,country
 31,8,Jolm,Jed & Colm,Ghana
 32,8,Butt Buddies,Jackson & Jacob,Scotland
 33,9,Butt Buddies,Jackson & Jacob,Paraguay
-34,9,Jolm,Jed & Colm,Congo DR
+34,9,Jolm,Jed & Colm,DR Congo
 35,9,Bomb Squad,Preston & Jack,Iran
 36,9,Ballzach,Eric and Zach,Uzbekistan
 37,10,Ballzach,Eric and Zach,Saudi Arabia
 38,10,Bomb Squad,Preston & Jack,South Africa
-39,10,Jolm,Jed & Colm,Bosnia & Herzegovina
+39,10,Jolm,Jed & Colm,Bosnia and Herzegovina
 40,10,Butt Buddies,Jackson & Jacob,Jordan
 41,11,Butt Buddies,Jackson & Jacob,Panama
 42,11,Jolm,Jed & Colm,New Zealand
@@ -46,4 +46,4 @@ pick,round,team_name,members,country
 45,12,Ballzach,Eric and Zach,Cape Verde
 46,12,Bomb Squad,Preston & Jack,Tunisia
 47,12,Jolm,Jed & Colm,Haiti
-48,12,Butt Buddies,Jackson & Jacob,Curacao
+48,12,Butt Buddies,Jackson & Jacob,Curaçao

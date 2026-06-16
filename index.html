@@ -145,6 +145,27 @@
     .dp-title{font-size:12px;font-weight:500;margin-bottom:4px;display:flex;align-items:center;gap:6px;}
     .dp-country{font-size:12px;color:var(--tx2);padding:1px 0;}
 
+    /* Standings */
+    .standings-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:10px;margin-bottom:1.5rem;}
+    .group-card{background:var(--bg1);border:0.5px solid var(--bd1);border-radius:var(--r-lg);overflow:hidden;}
+    .group-card-hdr{padding:8px 14px;background:var(--bg2);border-bottom:0.5px solid var(--bd1);font-size:11px;font-weight:500;color:var(--tx2);text-transform:uppercase;letter-spacing:.07em;display:flex;align-items:center;gap:8px;}
+    .standings-table{width:100%;border-collapse:collapse;font-size:12px;}
+    .standings-table th{padding:5px 8px;font-size:10px;font-weight:500;color:var(--tx3);text-transform:uppercase;letter-spacing:.05em;text-align:center;border-bottom:0.5px solid var(--bd1);}
+    .standings-table th.team-col{text-align:left;padding-left:10px;}
+    .standings-table td{padding:6px 8px;border-bottom:0.5px solid var(--bd1);text-align:center;vertical-align:middle;}
+    .standings-table tr:last-child td{border-bottom:none;}
+    .standings-table td.team-col{text-align:left;padding-left:0;}
+    .standings-table tr:hover td{background:var(--bg2);}
+    .srow-team{display:flex;align-items:center;gap:6px;}
+    .srow-flag{font-size:16px;width:24px;text-align:center;flex-shrink:0;}
+    .srow-name{font-size:13px;}
+    .srow-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0;}
+    .srow-drafted{display:inline-block;font-size:10px;border-radius:3px;padding:1px 5px;font-weight:500;white-space:nowrap;}
+    .pts-col{font-weight:500;}
+    .qualify-sep td{border-top:2px solid var(--green) !important;}
+    .standings-legend{display:flex;gap:12px;flex-wrap:wrap;margin-bottom:1rem;font-size:12px;color:var(--tx2);align-items:center;}
+    .standings-legend .leg-item{display:flex;align-items:center;gap:5px;}
+
     .toast{position:fixed;bottom:24px;right:24px;background:var(--green);color:#fff;padding:10px 16px;border-radius:var(--r-md);font-size:13px;opacity:0;transition:opacity .3s;pointer-events:none;z-index:999;font-family:var(--font);}
     .toast.show{opacity:1;}
     .loading{text-align:center;padding:3rem;color:var(--tx2);font-size:13px;}
@@ -167,7 +188,9 @@
   <div class="tabs">
     <button class="tab active" onclick="showTab('leaderboard',this)"><i class="ti ti-podium" aria-hidden="true" style="margin-right:4px"></i>Leaderboard</button>
     <button class="tab" onclick="showTab('matches',this)"><i class="ti ti-ball-football" aria-hidden="true" style="margin-right:4px"></i>Matches</button>
+    <button class="tab" onclick="showTab('bracket',this)"><i class="ti ti-tournament" aria-hidden="true" style="margin-right:4px"></i>Bracket</button>
     <button class="tab" onclick="showTab('rosters',this)"><i class="ti ti-users" aria-hidden="true" style="margin-right:4px"></i>Rosters</button>
+    <button class="tab" onclick="showTab('standings',this)"><i class="ti ti-list-numbers" aria-hidden="true" style="margin-right:4px"></i>Group Standings</button>
     <button class="tab" onclick="showTab('settings',this)"><i class="ti ti-settings" aria-hidden="true" style="margin-right:4px"></i>Settings</button>
   </div>
 
@@ -185,9 +208,16 @@
       <button class="btn-ref" onclick="fetchMatches(true)"><i class="ti ti-refresh" id="ref-icon" aria-hidden="true"></i> Refresh</button>
       <span id="last-updated"></span>
     </div>
-    <div id="bracket-container"></div>
     <div class="upcoming-title">Upcoming matches</div>
     <div class="match-list" id="match-list"></div>
+  </div>
+
+  <!-- BRACKET -->
+  <div id="tab-bracket" class="section">
+    <div class="refresh-bar">
+      <button class="btn-ref" onclick="fetchMatches(true)"><i class="ti ti-refresh" aria-hidden="true"></i> Refresh</button>
+    </div>
+    <div id="bracket-container"></div>
   </div>
 
   <!-- ROSTERS -->
@@ -197,6 +227,15 @@
     <div class="draft-board-wrap">
       <div id="draft-board-container"><div class="loading">Loading…</div></div>
     </div>
+  </div>
+
+  <!-- STANDINGS -->
+  <div id="tab-standings" class="section">
+    <div class="refresh-bar">
+      <button class="btn-ref" onclick="fetchMatches(true)"><i class="ti ti-refresh" id="ref-icon2" aria-hidden="true"></i> Refresh</button>
+      <span id="last-updated2"></span>
+    </div>
+    <div id="standings-body"><div class="loading">Loading…</div></div>
   </div>
 
   <!-- SETTINGS -->
@@ -239,8 +278,10 @@ const FLAGS = {
   'Nigeria':'🇳🇬','Norway':'🇳🇴','Panama':'🇵🇦','Paraguay':'🇵🇾','Peru':'🇵🇪',
   'Poland':'🇵🇱','Portugal':'🇵🇹','Qatar':'🇶🇦','Romania':'🇷🇴','Saudi Arabia':'🇸🇦',
   'Scotland':'🏴󠁧󠁢󠁳󠁣󠁴󠁿','Senegal':'🇸🇳','Serbia':'🇷🇸','Slovakia':'🇸🇰','South Africa':'🇿🇦',
-  'South Korea':'🇰🇷','Spain':'🇪🇸','Switzerland':'🇨🇭','Tunisia':'🇹🇳','Turkey':'🇹🇷',
-  'Ukraine':'🇺🇦','Uruguay':'🇺🇾','USA':'🇺🇸','Uzbekistan':'🇺🇿','Venezuela':'🇻🇪'
+  'South Korea':'🇰🇷','Spain':'🇪🇸','Switzerland':'🇨🇭','Tunisia':'🇹🇳','Türkiye':'🇹🇷',
+  'Ukraine':'🇺🇦','Uruguay':'🇺🇾','USA':'🇺🇸','Uzbekistan':'🇺🇿','Venezuela':'🇻🇪',
+  'Czechia':'🇨🇿','Bosnia and Herzegovina':'🇧🇦','Iraq':'🇮🇶','Sweden':'🇸🇪','Colombia':'🇨🇴',
+  'DR Congo':'🇨🇩','Austria':'🇦🇹','Belgium':'🇧🇪','Curaçao':'🇨🇼'
 };
 function flag(n){ return FLAGS[n]||'🏳'; }
 
@@ -354,7 +395,7 @@ async function fetchMatches(force) {
   icon.classList.remove('spin');
 }
 
-function renderAll() { renderLeaderboard(); renderRosters(); renderMatches(); }
+function renderAll() { renderLeaderboard(); renderRosters(); renderMatches(); renderBracket(); renderStandings(); }
 
 function updateLastUpdated() {
   const v = localStorage.getItem('wc26_updated');
@@ -387,6 +428,27 @@ function roundToStage(round) {
   if (round==='Final') return 'final';
   return null;
 }
+// Convert fixture local time (e.g. "13:00 UTC-6") to LA/Pacific time display
+function toPT(dateStr, timeStr) {
+  if (!timeStr) return '';
+  // Parse "HH:MM UTC±X" format
+  const m = timeStr.match(/^(\d{1,2}):(\d{2})\s+UTC([+-]\d+)$/);
+  if (!m) return timeStr; // fallback: show as-is
+  const [, hh, mm, offsetStr] = m;
+  const offsetHours = parseInt(offsetStr, 10);
+  // Build a UTC date from the local time + offset
+  const utcMs = new Date(`${dateStr}T${hh.padStart(2,'0')}:${mm}:00Z`).getTime()
+    - offsetHours * 3600000;
+  const utcDate = new Date(utcMs);
+  // Display in America/Los_Angeles (handles PDT/PST automatically)
+  return utcDate.toLocaleTimeString('en-US', {
+    timeZone: 'America/Los_Angeles',
+    hour: 'numeric',
+    minute: '2-digit',
+    timeZoneName: 'short',
+  });
+}
+
 function matchStatus(m) {
   if (m.score) return 'done';
   if (!m.date) return 'upcoming';
@@ -502,8 +564,22 @@ function renderBracket() {
 
 // ── Upcoming matches ──────────────────────────────────────────────────────────
 function renderMatches() {
-  renderBracket();
-  const upcoming=state.matches.filter(m=>matchStatus(m)!=='done').slice(0,15);
+  // Sort upcoming matches chronologically by date + time (converted to UTC ms)
+  const upcoming = state.matches
+    .filter(m => matchStatus(m) !== 'done')
+    .sort((a, b) => {
+      function toUtcMs(m) {
+        if (!m.date) return Infinity;
+        if (!m.time) return new Date(m.date + 'T23:59:00Z').getTime();
+        const match = m.time.match(/^(\d{1,2}):(\d{2})\s+UTC([+-]\d+)$/);
+        if (!match) return new Date(m.date + 'T23:59:00Z').getTime();
+        const [, hh, mm, offsetStr] = match;
+        return new Date(`${m.date}T${hh.padStart(2,'0')}:${mm}:00Z`).getTime()
+          - parseInt(offsetStr, 10) * 3600000;
+      }
+      return toUtcMs(a) - toUtcMs(b);
+    })
+    .slice(0, 15);
   if (!upcoming.length){ document.getElementById('match-list').innerHTML='<div class="no-m">No upcoming matches</div>'; return; }
   document.getElementById('match-list').innerHTML=upcoming.map(m=>{
     const st=matchStatus(m);
@@ -515,7 +591,7 @@ function renderMatches() {
       `<span class="dtag" style="background:${state.teams[i].color}22;color:${state.teams[i].color}">${state.teams[i].name}</span>`
     ).join('');
     const stLabel=st==='live'?`<span class="st-live">🔴 Live</span>`
-      :`<span class="st-upcoming">${m.date||'TBD'}${m.time?' · '+m.time:''}</span>`;
+      :`<span class="st-upcoming">${m.date||'TBD'}${m.time?' · '+toPT(m.date,m.time):''}</span>`;
     return `<div class="mc ${st==='live'?'live-now':''}">
       <div class="mc-teams">
         <div class="mc-team"><span class="mc-flag">${flag(m.team1)}</span><span class="mc-tname">${m.team1}</span>${sc?`<span class="mc-score ${w===m.team1?'win':''}">${sc[0]}</span>`:''}</div>
@@ -638,6 +714,141 @@ function renderSettings() {
   }
 }
 
+// ── Name normalisation (fixture JSON ↔ draft.csv) ────────────────────────────
+// Maps fixture JSON spellings → official FIFA / draft.csv spellings
+const NAME_MAP = {
+  'Czech Republic':      'Czechia',
+  'Bosnia & Herzegovina':'Bosnia and Herzegovina',
+  'Turkey':              'Türkiye',
+};
+function normName(n){ return NAME_MAP[n] || n; }
+
+// ── Standings ─────────────────────────────────────────────────────────────────
+function renderStandings() {
+  if (!state.matches.length && !state.teams.length) {
+    document.getElementById('standings-body').innerHTML = '<div class="loading">Loading…</div>';
+    return;
+  }
+  document.getElementById('last-updated2').textContent =
+    document.getElementById('last-updated').textContent;
+
+  // Gather all group-stage matches, build per-group team records
+  const groupMatches = state.matches.filter(m => m.group && m.group.startsWith('Group'));
+
+  // Identify groups and teams
+  const groupTeams = {}; // groupName → Set of team names (as in fixture JSON)
+  groupMatches.forEach(m => {
+    if (!groupTeams[m.group]) groupTeams[m.group] = new Set();
+    groupTeams[m.group].add(m.team1);
+    groupTeams[m.group].add(m.team2);
+  });
+
+  // Calculate standings record for each team
+  // record: { mp, w, d, l, gf, ga, pts }
+  function emptyRecord(){ return {mp:0,w:0,d:0,l:0,gf:0,ga:0,pts:0}; }
+
+  const records = {}; // teamName → record
+  groupMatches.forEach(m => {
+    if (!m.score) return;
+    const sc = m.score.ft || m.score;
+    if (!Array.isArray(sc) || sc.length < 2) return;
+    const [g1, g2] = sc;
+    [m.team1, m.team2].forEach(t => { if (!records[t]) records[t] = emptyRecord(); });
+    records[m.team1].mp++; records[m.team2].mp++;
+    records[m.team1].gf += g1; records[m.team1].ga += g2;
+    records[m.team2].gf += g2; records[m.team2].ga += g1;
+    if (g1 > g2) {
+      records[m.team1].w++; records[m.team1].pts += 3;
+      records[m.team2].l++;
+    } else if (g2 > g1) {
+      records[m.team2].w++; records[m.team2].pts += 3;
+      records[m.team1].l++;
+    } else {
+      records[m.team1].d++; records[m.team1].pts++;
+      records[m.team2].d++; records[m.team2].pts++;
+    }
+  });
+
+  // Build sorted group tables
+  const sortedGroups = Object.keys(groupTeams).sort();
+
+  // Draft team lookup (using normalised names)
+  function getDraftTeam(fixtureName) {
+    const norm = normName(fixtureName);
+    const idx = state.assign[norm];
+    if (idx === undefined) return null;
+    return state.teams[idx] || null;
+  }
+
+  // Legend
+  const legendHTML = `<div class="standings-legend">
+    <span style="color:var(--tx2);font-weight:500">Draft teams:</span>
+    ${state.teams.map(t=>`<span class="leg-item"><span class="srow-dot" style="background:${t.color}"></span>${t.name}</span>`).join('')}
+    <span class="leg-item" style="margin-left:8px"><span style="display:inline-block;width:20px;height:2px;background:var(--green);border-radius:1px"></span>&nbsp;Qualification line</span>
+  </div>`;
+
+  const groupsHTML = sortedGroups.map(grpName => {
+    const teams = [...groupTeams[grpName]];
+    const sorted = [...teams].sort((a, b) => {
+      const ra = records[a] || emptyRecord();
+      const rb = records[b] || emptyRecord();
+      if (rb.pts !== ra.pts) return rb.pts - ra.pts;
+      const gdA = ra.gf - ra.ga, gdB = rb.gf - rb.ga;
+      if (gdB !== gdA) return gdB - gdA;
+      return rb.gf - ra.gf;
+    });
+
+    const rows = sorted.map((team, i) => {
+      const r = records[team] || emptyRecord();
+      const gd = r.gf - r.ga;
+      const dt = getDraftTeam(team);
+      const dotStyle = dt ? `background:${dt.color}` : 'background:var(--tx3)';
+      const draftBadge = dt
+        ? `<span class="srow-drafted" style="background:${dt.color}22;color:${dt.color}">${dt.name}</span>`
+        : `<span class="srow-drafted" style="background:var(--bg2);color:var(--tx3)">Undrafted</span>`;
+      const qualSep = i === 2 ? ' qualify-sep' : '';
+      return `<tr class="${qualSep}">
+        <td>${i+1}</td>
+        <td class="team-col">
+          <div class="srow-team">
+            <span class="srow-dot" style="${dotStyle}"></span>
+            <span class="srow-flag">${flag(team)}</span>
+            <span class="srow-name">${team}</span>
+            ${draftBadge}
+          </div>
+        </td>
+        <td>${r.mp}</td>
+        <td>${r.w}</td>
+        <td>${r.d}</td>
+        <td>${r.l}</td>
+        <td>${gd > 0 ? '+' : ''}${gd}</td>
+        <td class="pts-col">${r.pts}</td>
+      </tr>`;
+    }).join('');
+
+    return `<div class="group-card">
+      <div class="group-card-hdr"><i class="ti ti-table" aria-hidden="true"></i>${grpName}</div>
+      <table class="standings-table">
+        <thead><tr>
+          <th style="width:24px">#</th>
+          <th class="team-col">Team</th>
+          <th title="Played">MP</th>
+          <th title="Won">W</th>
+          <th title="Drawn">D</th>
+          <th title="Lost">L</th>
+          <th title="Goal difference">GD</th>
+          <th title="Points">Pts</th>
+        </tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>`;
+  }).join('');
+
+  document.getElementById('standings-body').innerHTML =
+    legendHTML +
+    `<div class="standings-grid">${groupsHTML}</div>`;
+}
+
 // ── Tabs ──────────────────────────────────────────────────────────────────────
 function showTab(name, btn) {
   document.querySelectorAll('.section').forEach(s=>s.classList.remove('active'));
@@ -646,7 +857,9 @@ function showTab(name, btn) {
   btn.classList.add('active');
   if (name==='leaderboard') renderLeaderboard();
   if (name==='matches') { renderMatches(); updateLastUpdated(); }
+  if (name==='bracket') renderBracket();
   if (name==='rosters') renderRosters();
+  if (name==='standings') renderStandings();
   if (name==='settings') renderSettings();
 }
 
