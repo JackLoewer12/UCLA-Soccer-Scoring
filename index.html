@@ -466,12 +466,27 @@ function winner(m) {
 }
 
 // ── Leaderboard ───────────────────────────────────────────────────────────────
+function isDraw(m) {
+  if (!m.score) return false;
+  const s = m.score.ft || m.score;
+  if (!Array.isArray(s) || s.length < 2) return false;
+  return s[0] === s[1];
+}
+
 function getTeamPoints(idx) {
   const bd=Object.fromEntries(Object.keys(state.scoring).map(k=>[k,0]));
   const countries=state.teams[idx]?.countries||[];
   state.matches.forEach(m=>{
-    const w=winner(m); if(!w||!countries.includes(w)) return;
     const stage=roundToStage(m.round);
+    // Group stage tie
+    if (stage==='group' && isDraw(m)) {
+      if (countries.includes(m.team1) || countries.includes(m.team2)) {
+        bd['group_tie']+=(state.scoring['group_tie']||0);
+      }
+      return;
+    }
+    // Win
+    const w=winner(m); if(!w||!countries.includes(w)) return;
     if (stage&&state.scoring[stage]) bd[stage]+=(state.scoring[stage]||0);
   });
   return {total:Object.values(bd).reduce((a,b)=>a+b,0),breakdown:bd};
@@ -507,7 +522,9 @@ function renderLeaderboard() {
   const nationPts=[];
   Object.keys(FLAGS).forEach(country=>{
     const wins=state.matches.filter(m=>winner(m)===country);
-    const pts=wins.reduce((a,m)=>{const s=roundToStage(m.round);return a+(s&&state.scoring[s]?state.scoring[s]:0);},0);
+    const draws=state.matches.filter(m=>isDraw(m)&&roundToStage(m.round)==='group'&&(m.team1===country||m.team2===country));
+    const pts=wins.reduce((a,m)=>{const s=roundToStage(m.round);return a+(s&&state.scoring[s]?state.scoring[s]:0);},0)
+             +draws.length*(state.scoring['group_tie']||0);
     if (pts>0){
       const tidx=state.assign[country]!==undefined?state.assign[country]:-1;
       nationPts.push({country,pts,teamName:tidx>=0?state.teams[tidx]?.name:'Unassigned',teamColor:tidx>=0?state.teams[tidx]?.color:'#aaa'});
@@ -616,7 +633,9 @@ function renderRosters() {
     const {total}=getTeamPoints(i);
     const rows=t.countries.map(name=>{
       const wins=state.matches.filter(m=>winner(m)===name);
-      const pts=wins.reduce((a,m)=>{const s=roundToStage(m.round);return a+(s&&state.scoring[s]?state.scoring[s]:0);},0);
+      const draws=state.matches.filter(m=>isDraw(m)&&roundToStage(m.round)==='group'&&(m.team1===name||m.team2===name));
+      const pts=wins.reduce((a,m)=>{const s=roundToStage(m.round);return a+(s&&state.scoring[s]?state.scoring[s]:0);},0)
+               +draws.length*(state.scoring['group_tie']||0);
       const stages=wins.map(m=>state.scoringRows.find(r=>r.stage===roundToStage(m.round))?.label).filter(Boolean);
       return `<div class="cr">
         <span class="cr-flag">${flag(name)}</span>
