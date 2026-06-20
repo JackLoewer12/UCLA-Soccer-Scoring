@@ -480,9 +480,8 @@ function getTeamPoints(idx) {
     const stage=roundToStage(m.round);
     // Group stage tie
     if (stage==='group' && isDraw(m)) {
-      if (countries.includes(m.team1) || countries.includes(m.team2)) {
-        bd['group_tie']+=(state.scoring['group_tie']||0);
-      }
+      if (countries.includes(m.team1)) bd['group_tie']+=(state.scoring['group_tie']||0);
+      if (countries.includes(m.team2)) bd['group_tie']+=(state.scoring['group_tie']||0);
       return;
     }
     // Win
