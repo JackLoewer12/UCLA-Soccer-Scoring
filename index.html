@@ -380,7 +380,7 @@ async function fetchMatches(force) {
   try {
     const r = await fetch(FIXTURES_URL+'?nc='+Date.now());
     const d = await r.json();
-    state.matches = d.matches||[];
+    state.matches = normMatches(d.matches||[]);
     try {
       localStorage.setItem('wc26_matches',JSON.stringify(state.matches));
       localStorage.setItem('wc26_updated',new Date().toISOString());
@@ -388,7 +388,7 @@ async function fetchMatches(force) {
     updateLastUpdated(); renderAll(); updateBadge();
     if (force) toast('Matches refreshed!');
   } catch(e) {
-    try { const c=localStorage.getItem('wc26_matches'); if(c) state.matches=JSON.parse(c); } catch(e2){}
+    try { const c=localStorage.getItem('wc26_matches'); if(c) state.matches=normMatches(JSON.parse(c)); } catch(e2){}
     renderAll();
     if (force) toast('Could not refresh — using cached data');
   }
@@ -736,11 +736,32 @@ function renderSettings() {
 // ── Name normalisation (fixture JSON ↔ draft.csv) ────────────────────────────
 // Maps fixture JSON spellings → official FIFA / draft.csv spellings
 const NAME_MAP = {
-  'Czech Republic':      'Czechia',
-  'Bosnia & Herzegovina':'Bosnia and Herzegovina',
-  'Turkey':              'Türkiye',
+  'Czech Republic':           'Czechia',
+  'Bosnia & Herzegovina':     'Bosnia and Herzegovina',
+  'Bosnia-Herzegovina':       'Bosnia and Herzegovina',
+  'Turkey':                   'Türkiye',
+  'Turkiye':                  'Türkiye',
+  'Korea Republic':           'South Korea',
+  'Republic of Korea':        'South Korea',
+  'United States':            'USA',
+  'United States of America': 'USA',
+  "Côte d'Ivoire":            'Ivory Coast',
+  "Cote d'Ivoire":            'Ivory Coast',
+  'Congo DR':                 'DR Congo',
+  'Democratic Republic of Congo': 'DR Congo',
+  'IR Iran':                  'Iran',
 };
 function normName(n){ return NAME_MAP[n] || n; }
+
+// Normalise all team names in a matches array at ingestion time so every
+// downstream comparison uses draft.csv spellings without extra normName calls.
+function normMatches(matches) {
+  return matches.map(m => ({
+    ...m,
+    team1: m.team1 ? normName(m.team1) : m.team1,
+    team2: m.team2 ? normName(m.team2) : m.team2,
+  }));
+}
 
 // ── Standings ─────────────────────────────────────────────────────────────────
 function renderStandings() {
@@ -883,7 +904,7 @@ function showTab(name, btn) {
 }
 
 // ── Boot ──────────────────────────────────────────────────────────────────────
-try { const c=localStorage.getItem('wc26_matches'); if(c) state.matches=JSON.parse(c); } catch(e){}
+try { const c=localStorage.getItem('wc26_matches'); if(c) state.matches=normMatches(JSON.parse(c)); } catch(e){}
 updateBadge(); updateLastUpdated();
 Promise.all([fetchDraft(), fetchScoring()]).then(()=>{ fetchMatches(false); });
 setInterval(()=>fetchMatches(false), 3*60*1000);
