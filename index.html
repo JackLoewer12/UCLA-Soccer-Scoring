@@ -198,7 +198,7 @@
   <div id="tab-leaderboard" class="section active">
     <div class="leg" id="scoring-legend"></div>
     <div id="leaderboard-body"><div class="loading">Loading…</div></div>
-    <div class="section-title">Top 5 scoring nations</div>
+    <div class="section-title">All nations</div>
     <div class="nation-table" id="top-nations"></div>
   </div>
 
@@ -518,29 +518,26 @@ function renderLeaderboard() {
     </div>`;
   }).join('');
 
-  // Top 5 nations
+  // All 48 draft nations
   const nationPts=[];
-  Object.keys(FLAGS).forEach(country=>{
+  Object.keys(state.assign).forEach(country=>{
     const wins=state.matches.filter(m=>winner(m)===country);
     const draws=state.matches.filter(m=>isDraw(m)&&roundToStage(m.round)==='group'&&(m.team1===country||m.team2===country));
     const pts=wins.reduce((a,m)=>{const s=roundToStage(m.round);return a+(s&&state.scoring[s]?state.scoring[s]:0);},0)
              +draws.length*(state.scoring['group_tie']||0);
-    if (pts>0){
-      const tidx=state.assign[country]!==undefined?state.assign[country]:-1;
-      nationPts.push({country,pts,teamName:tidx>=0?state.teams[tidx]?.name:'Unassigned',teamColor:tidx>=0?state.teams[tidx]?.color:'#aaa'});
-    }
+    const tidx=state.assign[country]!==undefined?state.assign[country]:-1;
+    nationPts.push({country,pts,teamName:tidx>=0?state.teams[tidx]?.name:'Unassigned',teamColor:tidx>=0?state.teams[tidx]?.color:'#aaa'});
   });
-  nationPts.sort((a,b)=>b.pts-a.pts);
-  const top5=nationPts.slice(0,5);
-  document.getElementById('top-nations').innerHTML = top5.length
-    ? top5.map((n,i)=>`<div class="nation-row">
+  nationPts.sort((a,b)=>b.pts-a.pts||a.country.localeCompare(b.country));
+  document.getElementById('top-nations').innerHTML = nationPts.length
+    ? nationPts.map((n,i)=>`<div class="nation-row">
         <div class="nation-rank">${i+1}</div>
         <div class="nation-flag">${flag(n.country)}</div>
         <div class="nation-name">${n.country}</div>
         <div class="nation-team"><span class="cdot" style="background:${n.teamColor}"></span>${n.teamName}</div>
-        <div class="nation-pts">${n.pts} pts</div>
+        <div class="nation-pts" style="${n.pts===0?'color:var(--tx3)':''}">${ n.pts>0?n.pts+' pts':'—'}</div>
       </div>`).join('')
-    : '<div style="padding:14px;font-size:13px;color:var(--tx3);text-align:center">No wins yet — check back once the tournament begins</div>';
+    : '<div style="padding:14px;font-size:13px;color:var(--tx3);text-align:center">No data yet</div>';
 }
 
 // ── Bracket ───────────────────────────────────────────────────────────────────
