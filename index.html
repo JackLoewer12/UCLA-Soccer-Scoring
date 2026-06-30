@@ -75,22 +75,24 @@
     .spin{animation:spin .7s linear infinite;display:inline-block;}
     @keyframes spin{to{transform:rotate(360deg)}}
     .bracket-wrap{overflow-x:auto;margin-bottom:1.5rem;}
-    .bracket{display:flex;gap:0;min-width:700px;}
-    .b-round{display:flex;flex-direction:column;flex:1;}
-    .b-round-title{font-size:10px;font-weight:500;color:var(--tx2);text-transform:uppercase;letter-spacing:.06em;text-align:center;padding:6px 4px;background:var(--bg2);border-bottom:0.5px solid var(--bd1);}
-    .b-slots{display:flex;flex-direction:column;justify-content:space-around;flex:1;padding:8px 4px;gap:6px;}
-    .b-match{background:var(--bg1);border:0.5px solid var(--bd1);border-radius:var(--r-md);overflow:hidden;font-size:11px;}
+    .bracket-outer{display:flex;flex-direction:column;}
+    .bracket-round-headers{display:flex;min-width:900px;margin-bottom:4px;}
+    .bracket-round-hdr{flex:1;font-size:10px;font-weight:500;color:var(--tx2);text-transform:uppercase;letter-spacing:.06em;text-align:center;padding:6px 4px;background:var(--bg2);border-radius:4px;margin:0 2px;}
+    .bracket-body{position:relative;min-width:900px;}
+    .bracket-col{position:absolute;top:0;bottom:0;}
+    .b-slot{position:absolute;left:4px;right:4px;display:flex;align-items:center;}
+    .b-match{background:var(--bg1);border:0.5px solid var(--bd1);border-radius:var(--r-md);overflow:hidden;font-size:11px;width:100%;}
     .b-team{display:flex;align-items:center;gap:5px;padding:4px 7px;border-bottom:0.5px solid var(--bd1);}
     .b-team:last-child{border-bottom:none;}
     .b-team.winner{background:var(--bg2);font-weight:500;}
     .b-team.winner .b-score{color:var(--green);}
-    .b-tflag{font-size:13px;flex-shrink:0;}.b-tname{flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:70px;}
+    .b-tflag{font-size:13px;flex-shrink:0;}.b-tname{flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:80px;}
     .b-score{font-weight:500;min-width:12px;text-align:right;color:var(--tx2);}
     .b-tbd{padding:4px 7px;color:var(--tx3);font-size:10px;font-style:italic;}
-    .b-team-owned{border-left:3px solid transparent;}
     .bracket-legend{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:1rem;font-size:12px;color:var(--tx2);align-items:center;}
     .bracket-legend-item{display:flex;align-items:center;gap:5px;}
     .bracket-legend-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0;}
+    .bracket-svg{position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;overflow:visible;}
     .upcoming-title{font-size:13px;font-weight:500;color:var(--tx2);text-transform:uppercase;letter-spacing:.06em;margin-bottom:.75rem;}
     .match-list{display:grid;gap:6px;}
     .mc{background:var(--bg1);border:0.5px solid var(--bd1);border-radius:var(--r-lg);padding:10px 14px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;}
@@ -545,52 +547,147 @@ function renderLeaderboard() {
 
 // ── Bracket ───────────────────────────────────────────────────────────────────
 function renderBracket() {
-  const rounds=['Round of 32','Round of 16','Quarter-final','Semi-final','Final'];
-  const roundMatches=rounds.map(r=>state.matches.filter(m=>m.round===r));
-  const hasKnockout=roundMatches.some(r=>r.length>0);
+  const rounds = ['Round of 32','Round of 16','Quarter-final','Semi-final','Final'];
+  const roundMatches = rounds.map(r => state.matches.filter(m => m.round === r));
+  const hasKnockout = roundMatches.some(r => r.length > 0);
+
   if (!hasKnockout) {
-    document.getElementById('bracket-container').innerHTML=
+    document.getElementById('bracket-container').innerHTML =
       `<div style="background:var(--bg2);border-radius:var(--r-lg);padding:14px 16px;font-size:13px;color:var(--tx2);margin-bottom:1.5rem">
         <i class="ti ti-tournament" aria-hidden="true" style="margin-right:6px"></i>
         Knockout bracket will appear here once the group stage is complete (from June 28).
       </div>`;
     return;
   }
+
   function getBracketTeamColor(name) {
     const idx = state.assign[name];
     if (idx === undefined) return null;
     return state.teams[idx]?.color || null;
   }
-  function bMatch(m) {
+
+  function bMatchHTML(m) {
     if (!m) return `<div class="b-match"><div class="b-tbd">TBD</div><div class="b-tbd">TBD</div></div>`;
-    const sc=m.score?(m.score.ft||m.score):null;
-    const w=winner(m);
-    function bTeam(name,score) {
-      const isW=w&&w===name;
-      const color=getBracketTeamColor(name);
-      const borderStyle=color?`border-left:3px solid ${color};padding-left:4px;`:`border-left:3px solid transparent;padding-left:4px;`;
-      return `<div class="b-team ${isW?'winner':''}" style="${borderStyle}">
+    const sc = m.score ? (m.score.ft || m.score) : null;
+    const w = winner(m);
+    function bTeam(name, score) {
+      const isW = w && w === name;
+      const color = getBracketTeamColor(name);
+      const border = color ? `border-left:3px solid ${color};padding-left:4px;` : `border-left:3px solid transparent;padding-left:4px;`;
+      return `<div class="b-team ${isW ? 'winner' : ''}" style="${border}">
         <span class="b-tflag">${flag(name)}</span>
         <span class="b-tname" title="${name}">${name}</span>
-        ${sc?`<span class="b-score">${score}</span>`:''}
+        ${sc ? `<span class="b-score">${score}</span>` : ''}
       </div>`;
     }
-    return `<div class="b-match">${bTeam(m.team1,sc?sc[0]:'')}${bTeam(m.team2,sc?sc[1]:'')}</div>`;
+    return `<div class="b-match">${bTeam(m.team1, sc ? sc[0] : '')}${bTeam(m.team2, sc ? sc[1] : '')}</div>`;
   }
+
+  // Layout constants
+  const MATCH_H   = 46;   // px height of a match card (2 rows x ~23px)
+  const NUM_SLOTS = 16;   // R32 has 16 matches (widest round)
+  const SLOT_H    = 52;   // px per slot unit — gives comfortable spacing
+  const TOTAL_H   = NUM_SLOTS * SLOT_H;  // 832px total bracket height
+  const NUM_ROUNDS = rounds.length;      // 5
+
+  // For round i (0=R32), there are 16/2^i matches, each spanning 2^i slots.
+  // The center of slot-group j (0-based) = (j + 0.5) * 2^i * SLOT_H px from top.
+  function slotCenterPx(roundIdx, matchIdx) {
+    const slotsPerMatch = Math.pow(2, roundIdx);
+    return (matchIdx * slotsPerMatch + slotsPerMatch / 2) * SLOT_H;
+  }
+
+  // Column widths: each round gets equal share
+  const COL_W_PCT = 100 / NUM_ROUNDS;
+
+  // Build round header row
+  const hdrs = rounds.map((r, ri) =>
+    `<div class="bracket-round-hdr" style="flex:1">${r}</div>`
+  ).join('');
+
+  // Build each round's match slots as absolutely positioned divs
+  // We'll collect connector line data for SVG overlay
+  const connectors = []; // { x1, y1, x2, y2 } in px within the bracket-body
+
+  let colsHTML = '';
+  rounds.forEach((r, ri) => {
+    const matches = roundMatches[ri];
+    const numMatches = Math.pow(2, NUM_ROUNDS - 1 - ri); // 16, 8, 4, 2, 1
+    const leftPct  = ri * COL_W_PCT;
+    const widthPct = COL_W_PCT;
+
+    let slotsHTML = '';
+    for (let mi = 0; mi < numMatches; mi++) {
+      const centerPx = slotCenterPx(ri, mi);
+      const topPx    = centerPx - MATCH_H / 2;
+
+      slotsHTML += `<div class="b-slot" style="top:${topPx}px;height:${MATCH_H}px;">
+        ${bMatchHTML(matches[mi] || null)}
+      </div>`;
+
+      // Connector lines: from right edge of this match to left edge of parent match in next round
+      if (ri < NUM_ROUNDS - 1) {
+        // This match's right-edge midpoint
+        const x1 = (leftPct + widthPct) / 100; // fraction of total width
+        const y1 = centerPx;
+        // Parent match index in next round
+        const parentMi = Math.floor(mi / 2);
+        const parentCenter = slotCenterPx(ri + 1, parentMi);
+        const x2 = (leftPct + widthPct) / 100; // same x, will be used as start
+        const y2 = parentCenter;
+        connectors.push({ ri, mi, x1frac: (leftPct + widthPct) / 100, y1: centerPx, y2: parentCenter, parentMi });
+      }
+    }
+
+    colsHTML += `<div class="bracket-col" style="left:${leftPct}%;width:${widthPct}%;position:absolute;top:0;bottom:0;">${slotsHTML}</div>`;
+  });
+
+  // Build SVG connector lines using a 1000xTOTAL_H viewBox.
+  // Each column is colWpx wide. For each match: stub right to gap, then (once per pair)
+  // vertical bar between siblings, then stub left into the parent match.
+  const SVG_W = 1000;
+  const colWpx = SVG_W / NUM_ROUNDS;
+
+  let svgLines = '';
+  connectors.forEach(({ ri, mi, y1 }) => {
+    const gapX        = (ri + 1) * colWpx;   // x of the boundary between columns ri and ri+1
+    const matchRightX = gapX - 6;             // right edge of match card in round ri
+    const matchLeftX  = gapX + 6;             // left edge of match card in round ri+1
+
+    // Horizontal stub from match right edge to the column gap
+    svgLines += `<line x1="${matchRightX}" y1="${y1}" x2="${gapX}" y2="${y1}" stroke="var(--bd2)" stroke-width="1.2"/>`;
+
+    if (mi % 2 === 0) {
+      // Draw vertical bar + horizontal feed to parent once per sibling pair
+      const siblingY = slotCenterPx(ri, mi + 1);
+      const parentY  = (y1 + siblingY) / 2;
+      svgLines += `<line x1="${gapX}" y1="${y1}"      x2="${gapX}"      y2="${siblingY}" stroke="var(--bd2)" stroke-width="1.2"/>`;
+      svgLines += `<line x1="${gapX}" y1="${parentY}" x2="${matchLeftX}" y2="${parentY}" stroke="var(--bd2)" stroke-width="1.2"/>`;
+    }
+  });
+
   const legendHTML = state.teams.length
     ? `<div class="bracket-legend">
         <span style="font-weight:500;color:var(--tx2)">Roster:</span>
-        ${state.teams.map(t=>`<span class="bracket-legend-item"><span class="bracket-legend-dot" style="background:${t.color}"></span>${t.name}</span>`).join('')}
+        ${state.teams.map(t => `<span class="bracket-legend-item"><span class="bracket-legend-dot" style="background:${t.color}"></span>${t.name}</span>`).join('')}
       </div>`
     : '';
-  document.getElementById('bracket-container').innerHTML=
-    legendHTML+
-    `<div class="bracket-wrap"><div class="bracket">`+
-    rounds.map((r,ri)=>`<div class="b-round">
-      <div class="b-round-title">${r}</div>
-      <div class="b-slots">${roundMatches[ri].map(m=>bMatch(m)).join('')}</div>
-    </div>`).join('')+
-    `</div></div>`;
+
+  document.getElementById('bracket-container').innerHTML =
+    legendHTML +
+    `<div class="bracket-wrap">
+      <div class="bracket-outer">
+        <div class="bracket-round-headers" style="display:flex;min-width:900px;margin-bottom:4px;">
+          ${hdrs}
+        </div>
+        <div class="bracket-body" style="position:relative;min-width:900px;height:${TOTAL_H}px;">
+          ${colsHTML}
+          <svg class="bracket-svg" viewBox="0 0 ${SVG_W} ${TOTAL_H}" preserveAspectRatio="none">
+            ${svgLines}
+          </svg>
+        </div>
+      </div>
+    </div>`;
 }
 
 // ── Upcoming matches ──────────────────────────────────────────────────────────
