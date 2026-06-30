@@ -67,6 +67,13 @@
     .nation-name{flex:1;font-size:13px;}
     .nation-team{font-size:11px;color:var(--tx2);}
     .nation-pts{font-size:13px;font-weight:500;color:var(--green);}
+    .perf-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:.5rem;}
+    @media (max-width:640px){.perf-grid{grid-template-columns:1fr;}}
+    .perf-col-title{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;padding:8px 14px;color:var(--tx2);}
+    .perf-move{font-size:11px;font-weight:600;padding:2px 7px;border-radius:999px;flex-shrink:0;white-space:nowrap;}
+    .perf-move.up{background:rgba(26,71,42,.12);color:var(--green);}
+    .perf-move.down{background:rgba(239,68,68,.12);color:#ef4444;}
+    .perf-pickrank{font-size:10px;color:var(--tx3);white-space:nowrap;}
 
     /* Matches */
     .refresh-bar{display:flex;align-items:center;gap:10px;font-size:12px;color:var(--tx2);margin-bottom:1rem;}
@@ -206,6 +213,8 @@
   <div id="tab-leaderboard" class="section active">
     <div class="leg" id="scoring-legend"></div>
     <div id="leaderboard-body"><div class="loading">Loading…</div></div>
+    <div class="section-title">Draft value</div>
+    <div class="perf-grid" id="perf-grid"></div>
     <div class="section-title">All nations</div>
     <div class="nation-table" id="top-nations"></div>
   </div>
@@ -567,6 +576,43 @@ function renderLeaderboard() {
         <div class="nation-pts" style="${n.pts===0?'color:var(--tx3)':''}">${ n.pts>0?n.pts+' pts':'—'}</div>
       </div>`).join('')
     : '<div style="padding:14px;font-size:13px;color:var(--tx3);text-align:center">No data yet</div>';
+
+  // Draft value: compare draft pick order to current points-rank to find over/underperformers.
+  // currentRank 1 = most points. draftPick 1 = drafted first overall.
+  // A team picked late (high pick #) but ranking well (low rank #) is overperforming.
+  const pickByCountry = {};
+  state.draftRows.forEach(row => { pickByCountry[row.country] = parseInt(row.pick); });
+
+  const valueRows = nationPts
+    .map((n, i) => ({ ...n, currentRank: i + 1, pick: pickByCountry[n.country] }))
+    .filter(n => Number.isFinite(n.pick))
+    .map(n => ({ ...n, delta: n.pick - n.currentRank })); // positive = overperforming
+
+  const overperformers = [...valueRows].sort((a,b)=>b.delta-a.delta || b.pts-a.pts).slice(0,5);
+  const underperformers = [...valueRows].sort((a,b)=>a.delta-b.delta || a.pts-b.pts).slice(0,5);
+
+  function perfRowHTML(n) {
+    const isUp = n.delta > 0;
+    const moveLabel = n.delta === 0 ? 'Even' : `${isUp?'▲':'▼'} ${Math.abs(n.delta)}`;
+    const moveClass = n.delta === 0 ? '' : (isUp ? 'up' : 'down');
+    return `<div class="nation-row">
+      <div class="nation-flag">${flag(n.country)}</div>
+      <div class="nation-name">${n.country}<div class="perf-pickrank">Pick ${n.pick} · now #${n.currentRank}</div></div>
+      <div class="nation-team"><span class="cdot" style="background:${n.teamColor}"></span>${n.teamName}</div>
+      ${moveClass ? `<div class="perf-move ${moveClass}">${moveLabel}</div>` : `<div class="perf-move" style="color:var(--tx3);background:transparent">Even</div>`}
+    </div>`;
+  }
+
+  document.getElementById('perf-grid').innerHTML = valueRows.length
+    ? `<div class="nation-table">
+        <div class="perf-col-title">Top 5 overperformers</div>
+        ${overperformers.map(perfRowHTML).join('') || '<div style="padding:14px;font-size:13px;color:var(--tx3);text-align:center">No data yet</div>'}
+      </div>
+      <div class="nation-table">
+        <div class="perf-col-title">Top 5 underperformers</div>
+        ${underperformers.map(perfRowHTML).join('') || '<div style="padding:14px;font-size:13px;color:var(--tx3);text-align:center">No data yet</div>'}
+      </div>`
+    : '<div style="padding:14px;font-size:13px;color:var(--tx3);text-align:center;grid-column:1/-1">No data yet</div>';
 }
 
 // ── Bracket ───────────────────────────────────────────────────────────────────
