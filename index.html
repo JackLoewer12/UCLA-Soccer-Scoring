@@ -88,6 +88,8 @@
     .b-team.winner .b-score{color:var(--green);}
     .b-tflag{font-size:13px;flex-shrink:0;}.b-tname{flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:80px;}
     .b-score{font-weight:500;min-width:12px;text-align:right;color:var(--tx2);}
+    .b-score-pk{font-size:9px;color:var(--tx3);margin-left:2px;}
+    .b-pk-label{font-size:8px;color:var(--tx3);text-align:center;text-transform:uppercase;letter-spacing:.05em;padding:1px 0;border-top:0.5px dashed var(--bd1);}
     .b-tbd{padding:4px 7px;color:var(--tx3);font-size:10px;font-style:italic;}
     .bracket-legend{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:1rem;font-size:12px;color:var(--tx2);align-items:center;}
     .bracket-legend-item{display:flex;align-items:center;gap:5px;}
@@ -464,11 +466,30 @@ function matchStatus(m) {
 }
 function winner(m) {
   if (!m.score) return null;
-  const s=m.score.ft||m.score;
-  if (!Array.isArray(s)||s.length<2) return null;
-  if (s[0]>s[1]) return m.team1;
-  if (s[1]>s[0]) return m.team2;
+  // Knockout matches that are level after 90/120 min are decided by penalties.
+  // score.p (if present) is the authoritative result whenever ft is a draw.
+  const ft = m.score.ft || m.score;
+  if (Array.isArray(ft) && ft.length >= 2 && ft[0] === ft[1] && Array.isArray(m.score.p)) {
+    const p = m.score.p;
+    if (p[0] > p[1]) return m.team1;
+    if (p[1] > p[0]) return m.team2;
+    return null;
+  }
+  const s = ft;
+  if (!Array.isArray(s) || s.length < 2) return null;
+  if (s[0] > s[1]) return m.team1;
+  if (s[1] > s[0]) return m.team2;
   return null;
+}
+
+// Returns { sc: [g1,g2], pk: [p1,p2]|null } — sc is the goals to show (prefers et over ft
+// if extra time was played), pk is the penalty score if the match went to a shootout.
+function scoreParts(m) {
+  if (!m.score) return null;
+  const sc = m.score.et || m.score.ft || m.score;
+  if (!Array.isArray(sc) || sc.length < 2) return null;
+  const pk = Array.isArray(m.score.p) ? m.score.p : null;
+  return { sc, pk };
 }
 
 // ── Leaderboard ───────────────────────────────────────────────────────────────
@@ -476,7 +497,10 @@ function isDraw(m) {
   if (!m.score) return false;
   const s = m.score.ft || m.score;
   if (!Array.isArray(s) || s.length < 2) return false;
-  return s[0] === s[1];
+  if (s[0] !== s[1]) return false;
+  // Level after 90/120 min, but if penalties decided it, it's not a draw.
+  if (Array.isArray(m.score.p)) return false;
+  return true;
 }
 
 function getTeamPoints(idx) {
@@ -568,25 +592,32 @@ function renderBracket() {
 
   function bMatchHTML(m) {
     if (!m) return `<div class="b-match"><div class="b-tbd">TBD</div><div class="b-tbd">TBD</div></div>`;
-    const sc = m.score ? (m.score.ft || m.score) : null;
+    const parts = scoreParts(m);
+    const sc = parts ? parts.sc : null;
+    const pk = parts ? parts.pk : null;
     const w = winner(m);
-    function bTeam(name, score) {
+    function bTeam(name, score, pkScore) {
       const isW = w && w === name;
       const color = getBracketTeamColor(name);
       const border = color ? `border-left:3px solid ${color};padding-left:4px;` : `border-left:3px solid transparent;padding-left:4px;`;
       return `<div class="b-team ${isW ? 'winner' : ''}" style="${border}">
         <span class="b-tflag">${flag(name)}</span>
         <span class="b-tname" title="${name}">${name}</span>
+        ${pkScore !== undefined ? `<span class="b-score-pk">(${pkScore})</span>` : ''}
         ${sc ? `<span class="b-score">${score}</span>` : ''}
       </div>`;
     }
-    return `<div class="b-match">${bTeam(m.team1, sc ? sc[0] : '')}${bTeam(m.team2, sc ? sc[1] : '')}</div>`;
+    return `<div class="b-match">
+      ${bTeam(m.team1, sc ? sc[0] : '', pk ? pk[0] : undefined)}
+      ${bTeam(m.team2, sc ? sc[1] : '', pk ? pk[1] : undefined)}
+      ${pk ? `<div class="b-pk-label">Pens</div>` : ''}
+    </div>`;
   }
 
   // Layout constants
-  const MATCH_H   = 46;   // px height of a match card (2 rows x ~23px)
+  const MATCH_H   = 46;   // px height of a normal match card; PK matches get a bit taller via CSS auto-height (slot just needs enough headroom)
   const NUM_SLOTS = 16;   // R32 has 16 matches (widest round)
-  const SLOT_H    = 52;   // px per slot unit — gives comfortable spacing
+  const SLOT_H    = 58;   // px per slot unit — gives comfortable spacing incl. PK label row
   const TOTAL_H   = NUM_SLOTS * SLOT_H;  // 832px total bracket height
   const NUM_ROUNDS = rounds.length;      // 5
 
