@@ -475,13 +475,23 @@ function matchStatus(m) {
 }
 function winner(m) {
   if (!m.score) return null;
-  // Knockout matches that are level after 90/120 min are decided by penalties.
-  // score.p (if present) is the authoritative result whenever ft is a draw.
+  // Knockout matches that are level after 90 min may be decided by extra time,
+  // or by penalties if still level after 120 min. score.p (if present) is
+  // authoritative whenever ft is a draw; otherwise fall back to score.et.
   const ft = m.score.ft || m.score;
-  if (Array.isArray(ft) && ft.length >= 2 && ft[0] === ft[1] && Array.isArray(m.score.p)) {
-    const p = m.score.p;
-    if (p[0] > p[1]) return m.team1;
-    if (p[1] > p[0]) return m.team2;
+  if (Array.isArray(ft) && ft.length >= 2 && ft[0] === ft[1]) {
+    if (Array.isArray(m.score.p)) {
+      const p = m.score.p;
+      if (p[0] > p[1]) return m.team1;
+      if (p[1] > p[0]) return m.team2;
+      return null;
+    }
+    if (Array.isArray(m.score.et) && m.score.et.length >= 2) {
+      const et = m.score.et;
+      if (et[0] > et[1]) return m.team1;
+      if (et[1] > et[0]) return m.team2;
+      return null;
+    }
     return null;
   }
   const s = ft;
