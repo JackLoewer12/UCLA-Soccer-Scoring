@@ -1,0 +1,25 @@
+pick,round,team_name,members,country
+1,1,Team 1,Jackson & Jed,France
+2,1,Team 2,Jack & Eric,England 
+3,1,Team 3,Preston & Colm,Germany
+4,1,Team 4,Zach & Jacob,Belgium
+5,2,Team 4,Zach & Jacob,Portugal
+6,2,Team 3,Preston & Colm,Spain
+7,2,Team 2,Jack & Eric,Netherlands
+8,2,Team 1,Jackson & Jed,Italy
+9,3,Team 1,Jackson & Jed,Turkey
+10,3,Team 2,Jack & Eric,Denmark
+11,3,Team 3,Preston & Colm,Serbia
+12,3,Team 4,Zach & Jacob,Croatia
+13,4,Team 4,Zach & Jacob,Switzerland
+14,4,Team 3,Preston & Colm,Ukraine
+15,4,Team 2,Jack & Eric,Hungary
+16,4,Team 1,Jackson & Jed,Austria
+17,5,Team 1,Jackson & Jed,Czech Republic
+18,5,Team 2,Jack & Eric,Romania
+19,5,Team 3,Preston & Colm,Scotland
+20,5,Team 4,Zach & Jacob,Slovakia
+21,6,Team 4,Zach & Jacob,Georgia
+22,6,Team 3,Preston & Colm,Albania
+23,6,Team 2,Jack & Eric,Poland 
+24,6,Team 1,Jackson & Jed,Slovenia

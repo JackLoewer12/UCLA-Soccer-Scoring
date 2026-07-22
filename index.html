@@ -181,6 +181,12 @@
     .standings-legend{display:flex;gap:12px;flex-wrap:wrap;margin-bottom:1rem;font-size:12px;color:var(--tx2);align-items:center;}
     .standings-legend .leg-item{display:flex;align-items:center;gap:5px;}
 
+    /* Tournament switcher */
+    .tourn-switcher{display:flex;gap:6px;margin-bottom:1rem;flex-wrap:wrap;}
+    .tourn-btn{background:var(--bg1);border:0.5px solid var(--bd2);border-radius:20px;padding:6px 14px;font-size:12px;cursor:pointer;color:var(--tx2);font-family:var(--font);transition:all .15s;}
+    .tourn-btn:hover{background:var(--bg2);color:var(--tx1);}
+    .tourn-btn.active{background:var(--green);border-color:var(--green);color:#fff;font-weight:500;}
+
     .toast{position:fixed;bottom:24px;right:24px;background:var(--green);color:#fff;padding:10px 16px;border-radius:var(--r-md);font-size:13px;opacity:0;transition:opacity .3s;pointer-events:none;z-index:999;font-family:var(--font);}
     .toast.show{opacity:1;}
     .loading{text-align:center;padding:3rem;color:var(--tx2);font-size:13px;}
@@ -191,13 +197,19 @@
 
   <div class="hdr">
     <div>
-      <h1><i class="ti ti-trophy" aria-hidden="true" style="margin-right:8px"></i>World Cup 2026 Draft Tracker</h1>
-      <p>USA · Canada · Mexico &nbsp;·&nbsp; June 11 – July 19, 2026</p>
+      <h1><i class="ti ti-trophy" aria-hidden="true" style="margin-right:8px"></i><span id="hdr-title-text">World Cup 2026 Draft Tracker</span></h1>
+      <p id="hdr-subtitle">USA · Canada · Mexico &nbsp;·&nbsp; June 11 – July 19, 2026</p>
     </div>
     <div class="hdr-badges">
       <div class="badge" id="stage-badge">Loading…</div>
       <div class="badge live-badge" id="live-badge" style="display:none">🔴 Live now</div>
     </div>
+  </div>
+
+  <div class="tourn-switcher" id="tourn-switcher">
+    <button class="tourn-btn" data-tid="wc2026" onclick="switchTournament('wc2026')">World Cup 2026</button>
+    <button class="tourn-btn" data-tid="wc2022" onclick="switchTournament('wc2022')">World Cup 2022</button>
+    <button class="tourn-btn" data-tid="euro2024" onclick="switchTournament('euro2024')">Euro 2024</button>
   </div>
 
   <div class="tabs">
@@ -259,15 +271,15 @@
   <div id="tab-settings" class="section">
     <div class="settings-card">
       <h3>Scoring system</h3>
-      <div class="info-box">Scoring is loaded from <code>scoring.csv</code>. Edit that file and push to change points.</div>
+      <div class="info-box" id="scoring-info-box">Scoring is loaded from <code>scoring.csv</code>. Edit that file and push to change points.</div>
       <table class="scoring-table">
-        <thead><tr><th>Stage</th><th>Points per win</th></tr></thead>
+        <thead><tr><th>Stage</th><th>Points</th></tr></thead>
         <tbody id="scoring-tbody"></tbody>
       </table>
     </div>
     <div class="settings-card">
       <h3>Draft assignments</h3>
-      <div class="info-box">
+      <div class="info-box" id="draft-info-box">
         Assignments are loaded from <code>draft.csv</code>. Format:<br>
         <code>pick,round,team_name,members,country</code>
       </div>
@@ -279,10 +291,73 @@
 <div class="toast" id="toast"></div>
 
 <script>
-const FIXTURES_URL = 'https://raw.githubusercontent.com/openfootball/worldcup.json/master/2026/worldcup.json';
-const DRAFT_URL    = 'draft.csv';
-const SCORING_URL  = 'scoring.csv';
 const PALETTE = ['#e85d04','#3a86ff','#8338ec','#2dc653','#f59e0b','#06b6d4'];
+
+// Maps fixture JSON spellings → official FIFA / draft.csv spellings.
+// Only needed for World Cup 2026 — the 2022/2024 fixture + draft data already agree on spelling.
+const WC2026_NAME_MAP = {
+  'Czech Republic':           'Czechia',
+  'Bosnia & Herzegovina':     'Bosnia and Herzegovina',
+  'Bosnia-Herzegovina':       'Bosnia and Herzegovina',
+  'Turkey':                   'Türkiye',
+  'Turkiye':                  'Türkiye',
+  'Korea Republic':           'South Korea',
+  'Republic of Korea':        'South Korea',
+  'United States':            'USA',
+  'United States of America': 'USA',
+  "Côte d'Ivoire":            'Ivory Coast',
+  "Cote d'Ivoire":            'Ivory Coast',
+  'Congo DR':                 'DR Congo',
+  'Democratic Republic of Congo': 'DR Congo',
+  'IR Iran':                  'Iran',
+};
+
+// ── Tournament registry ────────────────────────────────────────────────────────
+// Each entry fully describes how to load and render one tournament. To add another
+// past tournament: drop its draft.csv/scoring.csv/matches.json into data/<id>/ and
+// add a config block here (plus a button in the .tourn-switcher in the HTML above).
+const TOURNAMENTS = {
+  wc2026: {
+    id: 'wc2026', label: 'World Cup 2026',
+    subtitle: 'USA · Canada · Mexico  ·  June 11 – July 19, 2026',
+    draftUrl: 'data/wc2026/draft.csv', scoringUrl: 'data/wc2026/scoring.csv',
+    fixturesUrl: 'https://raw.githubusercontent.com/openfootball/worldcup.json/master/2026/worldcup.json',
+    live: true, startDate: '2026-06-11', endDate: '2026-07-20', totalMatches: 104,
+    nameMap: WC2026_NAME_MAP,
+    bracketRounds: ['Round of 32','Round of 16','Quarter-final','Semi-final','Final'],
+    bracketMode: 'fixed-num',
+    // The official FIFA World Cup 2026 knockout schedule. Each round's matches are listed here
+    // in true top-to-bottom bracket-slot order (fixed by FIFA's published bracket, since fixture
+    // `num` order is NOT simple slot order — e.g. R16 match 89 = W74 v W77, match 90 = W73 v W75).
+    bracketNums: {
+      'Round of 32':   [74,77,73,75,83,84,81,82,76,78,79,80,86,88,85,87],
+      'Round of 16':   [89,90,93,94,91,92,95,96],
+      'Quarter-final': [97,98,99,100],
+      'Semi-final':    [101,102],
+      'Final':         [104],
+    },
+  },
+  wc2022: {
+    id: 'wc2022', label: 'World Cup 2022',
+    subtitle: 'Qatar  ·  November 20 – December 18, 2022',
+    draftUrl: 'data/wc2022/draft.csv', scoringUrl: 'data/wc2022/scoring.csv',
+    fixturesUrl: 'data/wc2022/matches.json',
+    live: false, totalMatches: 64,
+    nameMap: {},
+    bracketRounds: ['Round of 16','Quarter-finals','Semi-finals','Final'],
+    bracketMode: 'derive-from-final',
+  },
+  euro2024: {
+    id: 'euro2024', label: 'Euro 2024',
+    subtitle: 'Germany  ·  June 14 – July 14, 2024',
+    draftUrl: 'data/euro2024/draft.csv', scoringUrl: 'data/euro2024/scoring.csv',
+    fixturesUrl: 'data/euro2024/matches.json',
+    live: false, totalMatches: 51,
+    nameMap: {},
+    bracketRounds: ['Round of 16','Quarter-finals','Semi-finals','Final'],
+    bracketMode: 'derive-from-final',
+  },
+};
 
 const FLAGS = {
   'Algeria':'🇩🇿','Argentina':'🇦🇷','Australia':'🇦🇺','Austria':'🇦🇹','Belgium':'🇧🇪',
@@ -303,10 +378,13 @@ const FLAGS = {
 function flag(n){ return FLAGS[n]||'🏳'; }
 
 let state = {
+  tid: 'wc2026',
+  cfg: TOURNAMENTS.wc2026,
   draftRows: [],   // raw parsed CSV rows
   teams: [],       // [{ name, members, color, countries[] }]
   assign: {},      // country → team index
-  scoring: {},
+  scoring: {},      // "{stage}_win" / "{stage}_loss" / "group_tie" → points
+  scoringLabel: {}, // same keys → display label
   scoringRows: [],
   matches: []
 };
@@ -363,69 +441,113 @@ function buildTeams() {
 // ── Fetch functions ───────────────────────────────────────────────────────────
 async function fetchDraft() {
   try {
-    const r = await fetch(DRAFT_URL+'?nc='+Date.now());
+    const r = await fetch(state.cfg.draftUrl+'?nc='+Date.now());
     if (!r.ok) throw new Error();
     state.draftRows = parseCSV(await r.text());
     buildTeams();
   } catch(e) {
     document.getElementById('leaderboard-body').innerHTML =
-      '<div class="loading" style="color:#e24b4a">Could not load draft.csv — make sure it is in your repo</div>';
+      '<div class="loading" style="color:#e24b4a">Could not load '+state.cfg.draftUrl+' — make sure it is in your repo</div>';
   }
 }
 
+// Scoring rows may either give one row per stage (points for a win only — 0 for a
+// loss, as in the WC2026 format) or two rows per stage labelled "... Win" / "... Loss"
+// (as in the WC2022 / Euro2024 formats, which also award points just for reaching a
+// stage and losing there). Rows are stored as "{stage}_win" / "{stage}_loss" so both
+// shapes are handled the same way downstream.
 async function fetchScoring() {
   try {
-    const r = await fetch(SCORING_URL+'?nc='+Date.now());
+    const r = await fetch(state.cfg.scoringUrl+'?nc='+Date.now());
     if (!r.ok) throw new Error();
     const rows = parseCSV(await r.text());
     state.scoringRows = rows;
-    state.scoring = {};
-    rows.forEach(row=>{ state.scoring[row.stage]=parseInt(row.points)||0; });
+    state.scoring = {}; state.scoringLabel = {};
+    rows.forEach(row=>{
+      const pts = parseInt(row.points)||0;
+      if (row.stage==='group_tie') { state.scoring['group_tie']=pts; state.scoringLabel['group_tie']=row.label; return; }
+      const key = /loss/i.test(row.label||'') ? `${row.stage}_loss` : `${row.stage}_win`;
+      state.scoring[key]=pts; state.scoringLabel[key]=row.label;
+    });
   } catch(e) {
     state.scoringRows=[
-      {stage:'group',label:'Group Stage',points:'1'},{stage:'r32',label:'Round of 32',points:'3'},
+      {stage:'group',label:'Group Stage Win',points:'1'},{stage:'r32',label:'Round of 32',points:'3'},
       {stage:'r16',label:'Round of 16',points:'5'},{stage:'qf',label:'Quarterfinals',points:'7'},
       {stage:'sf',label:'Semifinals',points:'9'},{stage:'final',label:'Final',points:'13'},
     ];
-    state.scoring={group:1,r32:3,r16:5,qf:7,sf:9,final:13};
+    state.scoring={group_win:1,r32_win:3,r16_win:5,qf_win:7,sf_win:9,final_win:13};
+    state.scoringLabel={group_win:'Group Stage Win',r32_win:'Round of 32',r16_win:'Round of 16',qf_win:'Quarterfinals',sf_win:'Semifinals',final_win:'Final'};
   }
 }
 
 async function fetchMatches(force) {
   const icon = document.getElementById('ref-icon');
   icon.classList.add('spin');
+  const tid = state.tid; // guard against a tournament switch completing mid-fetch
   try {
-    const r = await fetch(FIXTURES_URL+'?nc='+Date.now());
+    const r = await fetch(state.cfg.fixturesUrl+'?nc='+Date.now());
     const d = await r.json();
-    state.matches = normMatches(d.matches||[]);
+    const matches = normMatches(d.matches||[]);
+    if (state.tid !== tid) return;
+    state.matches = matches;
     try {
-      localStorage.setItem('wc26_matches',JSON.stringify(state.matches));
-      localStorage.setItem('wc26_updated',new Date().toISOString());
+      localStorage.setItem(tid+'_matches',JSON.stringify(state.matches));
+      localStorage.setItem(tid+'_updated',new Date().toISOString());
     } catch(e){}
     updateLastUpdated(); renderAll(); updateBadge();
     if (force) toast('Matches refreshed!');
   } catch(e) {
-    try { const c=localStorage.getItem('wc26_matches'); if(c) state.matches=normMatches(JSON.parse(c)); } catch(e2){}
+    if (state.tid !== tid) return;
+    try { const c=localStorage.getItem(tid+'_matches'); if(c) state.matches=normMatches(JSON.parse(c)); } catch(e2){}
     renderAll();
     if (force) toast('Could not refresh — using cached data');
   }
   icon.classList.remove('spin');
 }
 
+// ── Tournament switching ─────────────────────────────────────────────────────
+function switchTournament(id) {
+  if (!TOURNAMENTS[id] || id === state.tid) return;
+  state.tid = id; state.cfg = TOURNAMENTS[id];
+  state.draftRows=[]; state.teams=[]; state.assign={};
+  state.scoring={}; state.scoringRows=[]; state.scoringLabel={}; state.matches=[];
+  applyTournamentChrome(id);
+  try { localStorage.setItem('active_tournament', id); } catch(e){}
+  ['leaderboard-body','roster-grid','draft-board-container','standings-body'].forEach(elId=>{
+    const el=document.getElementById(elId); if (el) el.innerHTML='<div class="loading">Loading…</div>';
+  });
+  try { const c=localStorage.getItem(id+'_matches'); if(c) state.matches=normMatches(JSON.parse(c)); } catch(e){}
+  updateBadge(); updateLastUpdated();
+  Promise.all([fetchDraft(), fetchScoring()]).then(()=>{ fetchMatches(false); });
+}
+
+function applyTournamentChrome(id) {
+  document.querySelectorAll('.tourn-btn').forEach(b=>b.classList.toggle('active', b.dataset.tid===id));
+  document.getElementById('hdr-title-text').textContent = state.cfg.label+' Draft Tracker';
+  document.getElementById('hdr-subtitle').textContent = state.cfg.subtitle;
+  document.title = state.cfg.label+' Draft Tracker';
+}
+
 function renderAll() { renderLeaderboard(); renderRosters(); renderMatches(); renderBracket(); renderStandings(); }
 
 function updateLastUpdated() {
-  const v = localStorage.getItem('wc26_updated');
+  const v = localStorage.getItem(state.tid+'_updated');
   document.getElementById('last-updated').textContent = v?'Updated '+new Date(v).toLocaleTimeString():'';
 }
 
 function updateBadge() {
   const badge=document.getElementById('stage-badge'), lb=document.getElementById('live-badge');
+  const cfg=state.cfg;
+  if (!cfg.live) {
+    lb.style.display='none';
+    badge.textContent = 'Tournament Complete · '+state.matches.filter(m=>m.score).length+' / '+cfg.totalMatches+' played';
+    return;
+  }
   const now=new Date();
-  if (now<new Date('2026-06-11')){ badge.textContent='Starts June 11, 2026'; return; }
-  if (now>new Date('2026-07-20')){ badge.textContent='Tournament Complete'; return; }
+  if (now<new Date(cfg.startDate)){ badge.textContent='Starts '+new Date(cfg.startDate).toLocaleDateString('en-US',{month:'long',day:'numeric',year:'numeric'}); return; }
+  if (now>new Date(cfg.endDate)){ badge.textContent='Tournament Complete'; return; }
   lb.style.display = state.matches.some(m=>matchStatus(m)==='live')?'':'none';
-  badge.textContent = state.matches.filter(m=>m.score).length+' / 104 matches played';
+  badge.textContent = state.matches.filter(m=>m.score).length+' / '+cfg.totalMatches+' matches played';
 }
 
 function toast(msg) {
@@ -440,8 +562,8 @@ function roundToStage(round) {
   if (round.startsWith('Matchday')) return 'group';
   if (round==='Round of 32') return 'r32';
   if (round==='Round of 16') return 'r16';
-  if (round==='Quarter-final') return 'qf';
-  if (round==='Semi-final') return 'sf';
+  if (round==='Quarter-final' || round==='Quarter-finals') return 'qf';
+  if (round==='Semi-final' || round==='Semi-finals') return 'sf';
   if (round==='Final') return 'final';
   return null;
 }
@@ -522,20 +644,35 @@ function isDraw(m) {
   return true;
 }
 
-function getTeamPoints(idx) {
-  const bd=Object.fromEntries(Object.keys(state.scoring).map(k=>[k,0]));
-  const countries=state.teams[idx]?.countries||[];
+// Every scoring event (group tie / stage win / stage loss) for one country, in match
+// order. Centralizing this means the leaderboard, roster cards, and nation list all
+// agree on how points are computed for both scoring formats (win-only vs win+loss).
+function countryStagePoints(country) {
+  const entries = [];
   state.matches.forEach(m=>{
+    if (m.team1!==country && m.team2!==country) return;
     const stage=roundToStage(m.round);
-    // Group stage tie
+    if (!stage) return;
     if (stage==='group' && isDraw(m)) {
-      if (countries.includes(m.team1)) bd['group_tie']+=(state.scoring['group_tie']||0);
-      if (countries.includes(m.team2)) bd['group_tie']+=(state.scoring['group_tie']||0);
+      const pts=state.scoring['group_tie']||0;
+      entries.push({key:'group_tie', label:state.scoringLabel['group_tie']||'Group Stage Tie', pts, m});
       return;
     }
-    // Win
-    const w=winner(m); if(!w||!countries.includes(w)) return;
-    if (stage&&state.scoring[stage]) bd[stage]+=(state.scoring[stage]||0);
+    const w=winner(m);
+    if (!w) return;
+    const outcome = w===country ? 'win' : 'loss';
+    const key=`${stage}_${outcome}`;
+    const pts=state.scoring[key]||0;
+    if (pts) entries.push({key, label:state.scoringLabel[key]||key, pts, m});
+  });
+  return {pts: entries.reduce((a,e)=>a+e.pts,0), entries};
+}
+
+function getTeamPoints(idx) {
+  const bd={};
+  const countries=state.teams[idx]?.countries||[];
+  countries.forEach(c=>{
+    countryStagePoints(c).entries.forEach(e=>{ bd[e.key]=(bd[e.key]||0)+e.pts; });
   });
   return {total:Object.values(bd).reduce((a,b)=>a+b,0),breakdown:bd};
 }
@@ -543,7 +680,7 @@ function getTeamPoints(idx) {
 function renderLeaderboard() {
   if (!state.teams.length) return;
   document.getElementById('scoring-legend').innerHTML =
-    '<strong>Points per win:</strong> '+
+    '<strong>Scoring:</strong> '+
     state.scoringRows.map(r=>`<span><strong>${r.label}</strong> = ${r.points} pts</span>`).join(' · ');
 
   const scored=state.teams.map((t,i)=>({...t,idx:i,...getTeamPoints(i)}));
@@ -552,7 +689,7 @@ function renderLeaderboard() {
   document.getElementById('leaderboard-body').innerHTML=scored.map((t,rank)=>{
     const rc=rank===0?'r1':rank===1?'r2':rank===2?'r3':'';
     const bd=Object.entries(t.breakdown).filter(([,p])=>p>0)
-      .map(([s,p])=>`<span class="pill"><strong>${p}</strong> ${state.scoringRows.find(r=>r.stage===s)?.label||s}</span>`).join('');
+      .map(([s,p])=>`<span class="pill"><strong>${p}</strong> ${state.scoringLabel[s]||s}</span>`).join('');
     return `<div class="lb-card ${rc}">
       <div class="lb-row">
         <div class="rnk">${rank+1}</div>
@@ -569,10 +706,7 @@ function renderLeaderboard() {
   // All 48 draft nations
   const nationPts=[];
   Object.keys(state.assign).forEach(country=>{
-    const wins=state.matches.filter(m=>winner(m)===country);
-    const draws=state.matches.filter(m=>isDraw(m)&&roundToStage(m.round)==='group'&&(m.team1===country||m.team2===country));
-    const pts=wins.reduce((a,m)=>{const s=roundToStage(m.round);return a+(s&&state.scoring[s]?state.scoring[s]:0);},0)
-             +draws.length*(state.scoring['group_tie']||0);
+    const pts=countryStagePoints(country).pts;
     const tidx=state.assign[country]!==undefined?state.assign[country]:-1;
     nationPts.push({country,pts,teamName:tidx>=0?state.teams[tidx]?.name:'Unassigned',teamColor:tidx>=0?state.teams[tidx]?.color:'#aaa'});
   });
@@ -626,31 +760,53 @@ function renderLeaderboard() {
 }
 
 // ── Bracket ───────────────────────────────────────────────────────────────────
-function renderBracket() {
-  // The official FIFA World Cup 2026 knockout schedule. Each round's matches are listed here
-  // in true top-to-bottom bracket-slot order. This mapping is fixed by FIFA's published bracket
-  // (it is NOT simply ascending by fixture `num`, since e.g. R16 match 89 = W74 v W77, while
-  // match 90 = W73 v W75 — the pairing skips around). Hardcoding this guarantees that when two
-  // sibling matches finish, their winner correctly lands in the right slot of the next round.
-  const BRACKET_NUMS = {
-    'Round of 32':   [74,77,73,75,83,84,81,82,76,78,79,80,86,88,85,87],
-    'Round of 16':   [89,90,93,94,91,92,95,96],
-    'Quarter-final': [97,98,99,100],
-    'Semi-final':    [101,102],
-    'Final':         [104],
-  };
+// Builds each round's matches, in true top-to-bottom bracket-slot order, working
+// backward from the Final. Match N's two teams are looked up by name against the
+// previous round's matches to find which two fed into it — this guarantees correct
+// sibling pairing for the connector lines without needing an explicit slot-order
+// mapping (which only WC2026's fixture data provides via its `num` field).
+function deriveBracketFromFinal(rounds) {
+  const nR = rounds.length;
+  const byRound = rounds.map(r => state.matches.filter(m => m.round === r));
+  const finalMatches = byRound[nR-1];
+  if (!finalMatches.length) return rounds.map((_,i) => new Array(Math.pow(2, nR-1-i)).fill(null));
 
-  const rounds = ['Round of 32','Round of 16','Quarter-final','Semi-final','Final'];
-  const byNum = {};
-  state.matches.forEach(m => { if (m.num !== undefined) byNum[m.num] = m; });
-  const roundMatches = rounds.map(r => BRACKET_NUMS[r].map(n => byNum[n] || null));
+  const ordered = new Array(nR);
+  ordered[nR-1] = [finalMatches[0]];
+  for (let ri = nR-1; ri > 0; ri--) {
+    const prevMatches = byRound[ri-1];
+    const prevOrdered = [];
+    ordered[ri].forEach(m => {
+      if (!m) { prevOrdered.push(null, null); return; }
+      prevOrdered.push(
+        prevMatches.find(pm => winner(pm) === m.team1) || null,
+        prevMatches.find(pm => winner(pm) === m.team2) || null,
+      );
+    });
+    ordered[ri-1] = prevOrdered;
+  }
+  return ordered;
+}
+
+function renderBracket() {
+  const rounds = state.cfg.bracketRounds;
+  const NUM_ROUNDS = rounds.length;
+
+  let roundMatches;
+  if (state.cfg.bracketMode === 'fixed-num') {
+    const byNum = {};
+    state.matches.forEach(m => { if (m.num !== undefined) byNum[m.num] = m; });
+    roundMatches = rounds.map(r => state.cfg.bracketNums[r].map(n => byNum[n] || null));
+  } else {
+    roundMatches = deriveBracketFromFinal(rounds);
+  }
   const hasKnockout = roundMatches.some(r => r.some(m => m));
 
   if (!hasKnockout) {
     document.getElementById('bracket-container').innerHTML =
       `<div style="background:var(--bg2);border-radius:var(--r-lg);padding:14px 16px;font-size:13px;color:var(--tx2);margin-bottom:1.5rem">
         <i class="ti ti-tournament" aria-hidden="true" style="margin-right:6px"></i>
-        Knockout bracket will appear here once the group stage is complete (from June 28).
+        Knockout bracket will appear here once the group stage is complete.
       </div>`;
     return;
   }
@@ -687,12 +843,11 @@ function renderBracket() {
 
   // Layout constants
   const MATCH_H   = 46;   // px height of a normal match card; PK matches get a bit taller via CSS auto-height (slot just needs enough headroom)
-  const NUM_SLOTS = 16;   // R32 has 16 matches (widest round)
+  const NUM_SLOTS = Math.pow(2, NUM_ROUNDS - 1); // matches in the widest (first) round
   const SLOT_H    = 58;   // px per slot unit — gives comfortable spacing incl. PK label row
-  const TOTAL_H   = NUM_SLOTS * SLOT_H;  // 832px total bracket height
-  const NUM_ROUNDS = rounds.length;      // 5
+  const TOTAL_H   = NUM_SLOTS * SLOT_H;  // total bracket height
 
-  // For round i (0=R32), there are 16/2^i matches, each spanning 2^i slots.
+  // For round i, there are NUM_SLOTS/2^i matches, each spanning 2^i slots.
   // The center of slot-group j (0-based) = (j + 0.5) * 2^i * SLOT_H px from top.
   function slotCenterPx(roundIdx, matchIdx) {
     const slotsPerMatch = Math.pow(2, roundIdx);
@@ -845,15 +1000,12 @@ function renderRosters() {
   document.getElementById('roster-grid').innerHTML=state.teams.map((t,i)=>{
     const {total}=getTeamPoints(i);
     const rows=t.countries.map(name=>{
-      const wins=state.matches.filter(m=>winner(m)===name);
-      const draws=state.matches.filter(m=>isDraw(m)&&roundToStage(m.round)==='group'&&(m.team1===name||m.team2===name));
-      const pts=wins.reduce((a,m)=>{const s=roundToStage(m.round);return a+(s&&state.scoring[s]?state.scoring[s]:0);},0)
-               +draws.length*(state.scoring['group_tie']||0);
-      const stages=wins.map(m=>state.scoringRows.find(r=>r.stage===roundToStage(m.round))?.label).filter(Boolean);
+      const {pts, entries}=countryStagePoints(name);
+      const lastLabel = entries.length ? entries[entries.length-1].label : '';
       return `<div class="cr">
         <span class="cr-flag">${flag(name)}</span>
         <span class="cr-name">${name}</span>
-        <span class="cr-stage">${stages[stages.length-1]||''}</span>
+        <span class="cr-stage">${lastLabel}</span>
         <span class="cr-pts ${pts>0?'has':''}">${pts>0?pts+' pts':'—'}</span>
       </div>`;
     }).join('')||`<div style="padding:10px 14px;font-size:12px;color:var(--tx3)">No countries assigned</div>`;
@@ -931,6 +1083,10 @@ function renderDraftBoard() {
 
 // ── Settings ──────────────────────────────────────────────────────────────────
 function renderSettings() {
+  document.getElementById('scoring-info-box').innerHTML =
+    `Scoring is loaded from <code>${state.cfg.scoringUrl}</code>. Edit that file and push to change points.`;
+  document.getElementById('draft-info-box').innerHTML =
+    `Assignments are loaded from <code>${state.cfg.draftUrl}</code>. Format:<br><code>pick,round,team_name,members,country</code>`;
   document.getElementById('scoring-tbody').innerHTML=state.scoringRows.map(r=>`
     <tr><td>${r.label}</td><td><span class="pts-badge">${r.points} pts</span></td></tr>`).join('');
   if (state.teams.length) {
@@ -947,24 +1103,10 @@ function renderSettings() {
 }
 
 // ── Name normalisation (fixture JSON ↔ draft.csv) ────────────────────────────
-// Maps fixture JSON spellings → official FIFA / draft.csv spellings
-const NAME_MAP = {
-  'Czech Republic':           'Czechia',
-  'Bosnia & Herzegovina':     'Bosnia and Herzegovina',
-  'Bosnia-Herzegovina':       'Bosnia and Herzegovina',
-  'Turkey':                   'Türkiye',
-  'Turkiye':                  'Türkiye',
-  'Korea Republic':           'South Korea',
-  'Republic of Korea':        'South Korea',
-  'United States':            'USA',
-  'United States of America': 'USA',
-  "Côte d'Ivoire":            'Ivory Coast',
-  "Cote d'Ivoire":            'Ivory Coast',
-  'Congo DR':                 'DR Congo',
-  'Democratic Republic of Congo': 'DR Congo',
-  'IR Iran':                  'Iran',
-};
-function normName(n){ return NAME_MAP[n] || n; }
+// Uses the active tournament's nameMap (see TOURNAMENTS config above) — WC2026's
+// fixture source spells some countries differently than its draft.csv; the 2022/2024
+// archives already agree with their draft.csv files, so their nameMap is empty.
+function normName(n){ return (state.cfg.nameMap && state.cfg.nameMap[n]) || n; }
 
 // Normalise all team names in a matches array at ingestion time so every
 // downstream comparison uses draft.csv spellings without extra normName calls.
@@ -1117,10 +1259,16 @@ function showTab(name, btn) {
 }
 
 // ── Boot ──────────────────────────────────────────────────────────────────────
-try { const c=localStorage.getItem('wc26_matches'); if(c) state.matches=normMatches(JSON.parse(c)); } catch(e){}
-updateBadge(); updateLastUpdated();
-Promise.all([fetchDraft(), fetchScoring()]).then(()=>{ fetchMatches(false); });
-setInterval(()=>fetchMatches(false), 3*60*1000);
+(function initBoot(){
+  let startId = 'wc2026';
+  try { const saved = localStorage.getItem('active_tournament'); if (saved && TOURNAMENTS[saved]) startId = saved; } catch(e){}
+  state.tid = startId; state.cfg = TOURNAMENTS[startId];
+  applyTournamentChrome(startId);
+  try { const c=localStorage.getItem(startId+'_matches'); if(c) state.matches=normMatches(JSON.parse(c)); } catch(e){}
+  updateBadge(); updateLastUpdated();
+  Promise.all([fetchDraft(), fetchScoring()]).then(()=>{ fetchMatches(false); });
+  setInterval(()=>{ if (state.cfg.live) fetchMatches(false); }, 3*60*1000);
+})();
 </script>
 </body>
 </html>
