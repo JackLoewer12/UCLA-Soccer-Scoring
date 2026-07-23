@@ -1,0 +1,11 @@
+stage,label,points
+group_tie,Group Stage Tie,0
+group,Group Stage Win,0
+r16,Round of 16 Loss,0
+r16,Round of 16 Win,0
+qf,Quarterfinals Loss,1
+qf,Quarterfinals Win,0
+sf,Semifinals Loss,2
+sf,Semifinals Win,0
+final,Finals Win,5
+final,Finals Loss,3

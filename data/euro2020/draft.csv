@@ -1,0 +1,17 @@
+pick,round,team_name,members,country
+1,1,Team 1,Jed,France
+2,1,Team 2,Jack,Italy
+3,1,Team 3,Preston,Belgium
+4,1,Team 4,Jackson,Germany
+5,2,Team 4,Jackson,Spain
+6,2,Team 3,Preston,Netherlands
+7,2,Team 2,Jack ,England
+8,2,Team 1,Jed,Sweden
+9,3,Team 1,Jed,Denmark
+10,3,Team 2,Jack,Croatia
+11,3,Team 3,Preston,Wales
+12,3,Team 4,Jackson,Portugal
+13,4,Team 4,Jackson,Ukraine
+14,4,Team 3,Preston,Austria
+15,4,Team 2,Jack ,Czechia
+16,4,Team 1,Jed,Switzerland
