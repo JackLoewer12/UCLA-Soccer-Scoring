@@ -219,6 +219,7 @@
     <button class="tab" onclick="showTab('bracket',this)"><i class="ti ti-tournament" aria-hidden="true" style="margin-right:4px"></i>Bracket</button>
     <button class="tab" onclick="showTab('rosters',this)"><i class="ti ti-users" aria-hidden="true" style="margin-right:4px"></i>Rosters</button>
     <button class="tab" onclick="showTab('standings',this)"><i class="ti ti-list-numbers" aria-hidden="true" style="margin-right:4px"></i>Group Standings</button>
+    <button class="tab" onclick="showTab('alltime',this)"><i class="ti ti-history" aria-hidden="true" style="margin-right:4px"></i>All Time</button>
     <button class="tab" onclick="showTab('settings',this)"><i class="ti ti-settings" aria-hidden="true" style="margin-right:4px"></i>Settings</button>
   </div>
 
@@ -266,6 +267,18 @@
       <span id="last-updated2"></span>
     </div>
     <div id="standings-body"><div class="loading">Loading…</div></div>
+  </div>
+
+  <!-- ALL TIME -->
+  <div id="tab-alltime" class="section">
+    <div class="refresh-bar">
+      <button class="btn-ref" onclick="loadAllTime(true)"><i class="ti ti-refresh" id="ref-icon3" aria-hidden="true"></i> Refresh</button>
+      <span id="alltime-status" style="font-size:12px;color:var(--tx3)"></span>
+    </div>
+    <div class="section-title" style="margin-top:0">All-time points</div>
+    <div id="alltime-leaderboard"><div class="loading">Loading…</div></div>
+    <div class="section-title">Favorite countries by player</div>
+    <div class="draft-preview" id="alltime-countries"></div>
   </div>
 
   <!-- SETTINGS -->
@@ -422,33 +435,34 @@ function parseCSV(text) {
 }
 
 // ── Build teams ───────────────────────────────────────────────────────────────
-function buildTeams() {
-  // Sort by pick number so snake board is in order
-  const rows = [...state.draftRows].sort((a,b)=>parseInt(a.pick)-parseInt(b.pick));
+// Pure: given a tournament's draft rows, returns { teams, assign } without touching
+// global state. buildTeams() (below) wraps this for the currently active tournament;
+// the All Time tab calls it directly per-tournament so it can compute all four at once.
+function deriveTeams(draftRows) {
+  const rows = [...draftRows].sort((a,b)=>parseInt(a.pick)-parseInt(b.pick));
   const seen = new Map();
-  // First pass: establish team order from round 1 picks
   rows.filter(r=>r.round==='1').forEach(r => {
     if (!seen.has(r.team_name))
       seen.set(r.team_name, { name:r.team_name, members:r.members, color:PALETTE[seen.size%PALETTE.length], countries:[] });
   });
-  // Fill in any teams not in round 1 (edge case)
   rows.forEach(r => {
     if (!seen.has(r.team_name))
       seen.set(r.team_name, { name:r.team_name, members:r.members, color:PALETTE[seen.size%PALETTE.length], countries:[] });
-    // Fill members from first non-empty occurrence
     if (!seen.get(r.team_name).members && r.members)
       seen.get(r.team_name).members = r.members;
   });
-  // Assign countries in pick order
+  rows.forEach(r => { seen.get(r.team_name)?.countries.push(r.country); });
+  const teams=[...seen.values()];
+  const assign={};
   rows.forEach(r => {
-    seen.get(r.team_name)?.countries.push(r.country);
+    const idx = teams.findIndex(t=>t.name===r.team_name);
+    if (idx>=0) assign[r.country]=idx;
   });
-  state.teams = [...seen.values()];
-  state.assign = {};
-  rows.forEach(r => {
-    const idx = state.teams.findIndex(t=>t.name===r.team_name);
-    if (idx>=0) state.assign[r.country]=idx;
-  });
+  return {teams, assign};
+}
+function buildTeams() {
+  const {teams, assign} = deriveTeams(state.draftRows);
+  state.teams = teams; state.assign = assign;
 }
 
 // ── Fetch functions ───────────────────────────────────────────────────────────
@@ -469,19 +483,28 @@ async function fetchDraft() {
 // (as in the WC2022 / Euro2024 formats, which also award points just for reaching a
 // stage and losing there). Rows are stored as "{stage}_win" / "{stage}_loss" so both
 // shapes are handled the same way downstream.
+// Pure: turns parsed scoring.csv rows into {scoring, scoringLabel} keyed by
+// "{stage}_win" / "{stage}_loss" / "group_tie". Shared by fetchScoring (active
+// tournament) and the All Time loader (every tournament at once).
+function parseScoringRows(rows) {
+  const scoring={}, scoringLabel={};
+  rows.forEach(row=>{
+    const pts = parseInt(row.points)||0;
+    if (row.stage==='group_tie') { scoring['group_tie']=pts; scoringLabel['group_tie']=row.label; return; }
+    const key = /loss/i.test(row.label||'') ? `${row.stage}_loss` : `${row.stage}_win`;
+    scoring[key]=pts; scoringLabel[key]=row.label;
+  });
+  return {scoring, scoringLabel};
+}
+
 async function fetchScoring() {
   try {
     const r = await fetch(state.cfg.scoringUrl+'?nc='+Date.now());
     if (!r.ok) throw new Error();
     const rows = parseCSV(await r.text());
     state.scoringRows = rows;
-    state.scoring = {}; state.scoringLabel = {};
-    rows.forEach(row=>{
-      const pts = parseInt(row.points)||0;
-      if (row.stage==='group_tie') { state.scoring['group_tie']=pts; state.scoringLabel['group_tie']=row.label; return; }
-      const key = /loss/i.test(row.label||'') ? `${row.stage}_loss` : `${row.stage}_win`;
-      state.scoring[key]=pts; state.scoringLabel[key]=row.label;
-    });
+    const {scoring, scoringLabel} = parseScoringRows(rows);
+    state.scoring = scoring; state.scoringLabel = scoringLabel;
   } catch(e) {
     state.scoringRows=[
       {stage:'group',label:'Group Stage Win',points:'1'},{stage:'r32',label:'Round of 32',points:'3'},
@@ -660,23 +683,26 @@ function isDraw(m) {
 // Every scoring event (group tie / stage win / stage loss) for one country, in match
 // order. Centralizing this means the leaderboard, roster cards, and nation list all
 // agree on how points are computed for both scoring formats (win-only vs win+loss).
-function countryStagePoints(country) {
+function countryStagePoints(country, matches, scoring, scoringLabel) {
+  matches = matches || state.matches;
+  scoring = scoring || state.scoring;
+  scoringLabel = scoringLabel || state.scoringLabel;
   const entries = [];
-  state.matches.forEach(m=>{
+  matches.forEach(m=>{
     if (m.team1!==country && m.team2!==country) return;
     const stage=roundToStage(m.round);
     if (!stage) return;
     if (stage==='group' && isDraw(m)) {
-      const pts=state.scoring['group_tie']||0;
-      entries.push({key:'group_tie', label:state.scoringLabel['group_tie']||'Group Stage Tie', pts, m});
+      const pts=scoring['group_tie']||0;
+      entries.push({key:'group_tie', label:scoringLabel['group_tie']||'Group Stage Tie', pts, m});
       return;
     }
     const w=winner(m);
     if (!w) return;
     const outcome = w===country ? 'win' : 'loss';
     const key=`${stage}_${outcome}`;
-    const pts=state.scoring[key]||0;
-    if (pts) entries.push({key, label:state.scoringLabel[key]||key, pts, m});
+    const pts=scoring[key]||0;
+    if (pts) entries.push({key, label:scoringLabel[key]||key, pts, m});
   });
   return {pts: entries.reduce((a,e)=>a+e.pts,0), entries};
 }
@@ -1123,15 +1149,112 @@ function normName(n){ return (state.cfg.nameMap && state.cfg.nameMap[n]) || n; }
 
 // Normalise all team names in a matches array at ingestion time so every
 // downstream comparison uses draft.csv spellings without extra normName calls.
-function normMatches(matches) {
+function normMatches(matches, nameMap) {
+  const map = nameMap || (state.cfg && state.cfg.nameMap) || {};
+  const nn = n => map[n] || n;
   return matches.map(m => ({
     ...m,
-    team1: m.team1 ? normName(m.team1) : m.team1,
-    team2: m.team2 ? normName(m.team2) : m.team2,
+    team1: m.team1 ? nn(m.team1) : m.team1,
+    team2: m.team2 ? nn(m.team2) : m.team2,
   }));
 }
 
-// ── Standings ─────────────────────────────────────────────────────────────────
+// ── All Time ──────────────────────────────────────────────────────────────────
+// Splits a draft.csv "members" field ("Jack & Eric", "Eric and Zach", "Jed") into
+// individual player names. Both partners get full credit for their team's points —
+// this is a two-person pool, not a split share.
+function splitMembers(members) {
+  return (members||'').split(/\s*(?:&|,|\band\b)\s*/i).map(s=>s.trim()).filter(Boolean);
+}
+
+let allTimeData = null; // cached: [{cfg, teams:[{...,total,members,countries}]}, ...] across every tournament
+
+async function loadTournamentForAllTime(cfg) {
+  try {
+    const [draftText, scoringText, fixturesJson] = await Promise.all([
+      fetch(cfg.draftUrl+'?nc='+Date.now()).then(r=>r.text()),
+      fetch(cfg.scoringUrl+'?nc='+Date.now()).then(r=>r.text()),
+      fetch(cfg.fixturesUrl+'?nc='+Date.now()).then(r=>r.json()),
+    ]);
+    const draftRows = parseCSV(draftText);
+    const {scoring, scoringLabel} = parseScoringRows(parseCSV(scoringText));
+    const matches = normMatches(fixturesJson.matches||[], cfg.nameMap);
+    const {teams} = deriveTeams(draftRows);
+    const teamsWithPoints = teams.map(t=>{
+      let total=0;
+      t.countries.forEach(c=>{ total += countryStagePoints(c, matches, scoring, scoringLabel).pts; });
+      return {...t, total};
+    });
+    teamsWithPoints.sort((a,b)=>b.total-a.total);
+    return {cfg, teams: teamsWithPoints};
+  } catch(e) {
+    return {cfg, teams: [], error:true};
+  }
+}
+
+async function loadAllTime(force) {
+  if (allTimeData && !force) { renderAllTime(); return; }
+  const icon = document.getElementById('ref-icon3');
+  if (icon) icon.classList.add('spin');
+  document.getElementById('alltime-status').textContent = 'Loading every tournament…';
+  allTimeData = await Promise.all(Object.values(TOURNAMENTS).map(loadTournamentForAllTime));
+  if (icon) icon.classList.remove('spin');
+  renderAllTime();
+}
+
+function computeAllTimeStats() {
+  const players = {}; // name -> { name, totalPoints, tournaments:[], countryCounts:{} }
+  (allTimeData||[]).forEach(({cfg, teams})=>{
+    teams.forEach((t, rank)=>{
+      splitMembers(t.members).forEach(name=>{
+        if (!players[name]) players[name] = {name, totalPoints:0, tournaments:[], countryCounts:{}};
+        const p = players[name];
+        p.totalPoints += t.total;
+        p.tournaments.push({label:cfg.label, teamName:t.name, points:t.total, rank:rank+1, of:teams.length});
+        t.countries.forEach(c=>{ p.countryCounts[c]=(p.countryCounts[c]||0)+1; });
+      });
+    });
+  });
+  return Object.values(players).sort((a,b)=>b.totalPoints-a.totalPoints);
+}
+
+function renderAllTime() {
+  if (!allTimeData) return;
+  const failed = allTimeData.filter(t=>t.error).map(t=>t.cfg.label);
+  document.getElementById('alltime-status').textContent = failed.length
+    ? `Loaded ${allTimeData.length-failed.length}/${allTimeData.length} tournaments — couldn't load ${failed.join(', ')}`
+    : `Across all ${allTimeData.length} tournaments`;
+
+  const players = computeAllTimeStats();
+
+  document.getElementById('alltime-leaderboard').innerHTML = players.length ? players.map((p,rank)=>{
+    const rc=rank===0?'r1':rank===1?'r2':rank===2?'r3':'';
+    const titles = p.tournaments.filter(t=>t.rank===1).length;
+    const perT = p.tournaments.map(t=>
+      `<span class="pill"><strong>${t.points}</strong> ${t.label} (#${t.rank}/${t.of})</span>`).join('');
+    return `<div class="lb-card ${rc}">
+      <div class="lb-row">
+        <div class="rnk">${rank+1}</div>
+        <div>
+          <div class="tname">${p.name}</div>
+          <div class="tmems">${p.tournaments.length} tournament${p.tournaments.length===1?'':'s'} played${titles?` · ${titles} title${titles===1?'':'s'}`:''}</div>
+        </div>
+        <div class="tpts">${p.totalPoints} <span>pts</span></div>
+      </div>
+      <div class="pills">${perT}</div>
+    </div>`;
+  }).join('') : '<div class="loading">No data yet</div>';
+
+  document.getElementById('alltime-countries').innerHTML = players.length ? players.map(p=>{
+    const top = Object.entries(p.countryCounts).sort((a,b)=>b[1]-a[1]).slice(0,4);
+    return `<div class="dp-card">
+      <div class="dp-title">${p.name}</div>
+      ${top.map(([country,n])=>`<div class="dp-country">${flag(country)} ${country} <span style="color:var(--tx3)">×${n}</span></div>`).join('')}
+    </div>`;
+  }).join('') : '';
+}
+
+
 function renderStandings() {
   if (!state.matches.length && !state.teams.length) {
     document.getElementById('standings-body').innerHTML = '<div class="loading">Loading…</div>';
@@ -1268,6 +1391,7 @@ function showTab(name, btn) {
   if (name==='bracket') renderBracket();
   if (name==='rosters') renderRosters();
   if (name==='standings') renderStandings();
+  if (name==='alltime') loadAllTime(false);
   if (name==='settings') renderSettings();
 }
 
