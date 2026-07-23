@@ -211,15 +211,15 @@
     <button class="tourn-btn" data-tid="wc2022" onclick="switchTournament('wc2022')">World Cup 2022</button>
     <button class="tourn-btn" data-tid="euro2024" onclick="switchTournament('euro2024')">Euro 2024</button>
     <button class="tourn-btn" data-tid="euro2020" onclick="switchTournament('euro2020')">Euro 2020</button>
+    <button class="tourn-btn" data-tid="alltime" onclick="switchTournament('alltime')"><i class="ti ti-history" aria-hidden="true" style="margin-right:4px"></i>All Time</button>
   </div>
 
-  <div class="tabs">
+  <div class="tabs" id="tabs-bar">
     <button class="tab active" onclick="showTab('leaderboard',this)"><i class="ti ti-podium" aria-hidden="true" style="margin-right:4px"></i>Leaderboard</button>
     <button class="tab" onclick="showTab('matches',this)"><i class="ti ti-ball-football" aria-hidden="true" style="margin-right:4px"></i>Matches</button>
     <button class="tab" onclick="showTab('bracket',this)"><i class="ti ti-tournament" aria-hidden="true" style="margin-right:4px"></i>Bracket</button>
     <button class="tab" onclick="showTab('rosters',this)"><i class="ti ti-users" aria-hidden="true" style="margin-right:4px"></i>Rosters</button>
     <button class="tab" onclick="showTab('standings',this)"><i class="ti ti-list-numbers" aria-hidden="true" style="margin-right:4px"></i>Group Standings</button>
-    <button class="tab" onclick="showTab('alltime',this)"><i class="ti ti-history" aria-hidden="true" style="margin-right:4px"></i>All Time</button>
     <button class="tab" onclick="showTab('settings',this)"><i class="ti ti-settings" aria-hidden="true" style="margin-right:4px"></i>Settings</button>
   </div>
 
@@ -543,8 +543,35 @@ async function fetchMatches(force) {
 
 // ── Tournament switching ─────────────────────────────────────────────────────
 function switchTournament(id) {
-  if (!TOURNAMENTS[id] || id === state.tid) return;
-  state.tid = id; state.cfg = TOURNAMENTS[id];
+  if (id === state.tid) return;
+  if (id !== 'alltime' && !TOURNAMENTS[id]) return;
+  const cameFromAllTime = state.tid === 'alltime';
+  state.tid = id;
+  document.querySelectorAll('.tourn-btn').forEach(b=>b.classList.toggle('active', b.dataset.tid===id));
+
+  if (id === 'alltime') {
+    document.getElementById('tabs-bar').style.display = 'none';
+    document.querySelector('.hdr-badges').style.display = 'none';
+    document.querySelectorAll('.section').forEach(s=>s.classList.remove('active'));
+    document.getElementById('tab-alltime').classList.add('active');
+    document.getElementById('hdr-title-text').textContent = 'All Time';
+    document.getElementById('hdr-subtitle').textContent = 'Every tournament, every player, combined';
+    document.title = 'All Time Draft Tracker';
+    try { localStorage.setItem('active_tournament', id); } catch(e){}
+    loadAllTime(false);
+    return;
+  }
+
+  document.getElementById('tabs-bar').style.display = '';
+  document.querySelector('.hdr-badges').style.display = '';
+  if (cameFromAllTime) {
+    document.querySelectorAll('.section').forEach(s=>s.classList.remove('active'));
+    document.getElementById('tab-leaderboard').classList.add('active');
+    document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
+    document.querySelector('#tabs-bar .tab').classList.add('active');
+  }
+
+  state.cfg = TOURNAMENTS[id];
   state.draftRows=[]; state.teams=[]; state.assign={};
   state.scoring={}; state.scoringRows=[]; state.scoringLabel={}; state.matches=[];
   applyTournamentChrome(id);
@@ -1391,7 +1418,6 @@ function showTab(name, btn) {
   if (name==='bracket') renderBracket();
   if (name==='rosters') renderRosters();
   if (name==='standings') renderStandings();
-  if (name==='alltime') loadAllTime(false);
   if (name==='settings') renderSettings();
 }
 
