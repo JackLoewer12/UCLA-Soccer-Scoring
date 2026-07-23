@@ -210,6 +210,7 @@
     <button class="tourn-btn" data-tid="wc2026" onclick="switchTournament('wc2026')">World Cup 2026</button>
     <button class="tourn-btn" data-tid="wc2022" onclick="switchTournament('wc2022')">World Cup 2022</button>
     <button class="tourn-btn" data-tid="euro2024" onclick="switchTournament('euro2024')">Euro 2024</button>
+    <button class="tourn-btn" data-tid="euro2020" onclick="switchTournament('euro2020')">Euro 2020</button>
   </div>
 
   <div class="tabs">
@@ -357,6 +358,16 @@ const TOURNAMENTS = {
     bracketRounds: ['Round of 16','Quarter-finals','Semi-finals','Final'],
     bracketMode: 'derive-from-final',
   },
+  euro2020: {
+    id: 'euro2020', label: 'Euro 2020',
+    subtitle: 'Pan-Europe  ·  June 11 – July 11, 2021 (postponed a year by COVID-19)',
+    draftUrl: 'data/euro2020/draft.csv', scoringUrl: 'data/euro2020/scoring.csv',
+    fixturesUrl: 'data/euro2020/matches.json',
+    live: false, totalMatches: 51,
+    nameMap: { 'Czech Republic': 'Czechia' },
+    bracketRounds: ['Round of 16','Quarter-finals','Semi-final','Final'],
+    bracketMode: 'derive-from-final',
+  },
 };
 
 const FLAGS = {
@@ -373,7 +384,9 @@ const FLAGS = {
   'South Korea':'🇰🇷','Spain':'🇪🇸','Switzerland':'🇨🇭','Tunisia':'🇹🇳','Türkiye':'🇹🇷',
   'Ukraine':'🇺🇦','Uruguay':'🇺🇾','USA':'🇺🇸','Uzbekistan':'🇺🇿','Venezuela':'🇻🇪',
   'Czechia':'🇨🇿','Bosnia and Herzegovina':'🇧🇦','Iraq':'🇮🇶','Sweden':'🇸🇪','Colombia':'🇨🇴',
-  'DR Congo':'🇨🇩','Austria':'🇦🇹','Belgium':'🇧🇪','Curaçao':'🇨🇼'
+  'DR Congo':'🇨🇩','Austria':'🇦🇹','Belgium':'🇧🇪','Curaçao':'🇨🇼',
+  'Denmark':'🇩🇰','Finland':'🇫🇮','North Macedonia':'🇲🇰','Russia':'🇷🇺','Turkey':'🇹🇷',
+  'Wales':'🏴󠁧󠁢󠁷󠁬󠁳󠁿'
 };
 function flag(n){ return FLAGS[n]||'🏳'; }
 
