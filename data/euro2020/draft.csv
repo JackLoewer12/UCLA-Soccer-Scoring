@@ -1,17 +1,17 @@
 pick,round,team_name,members,country
-1,1,Team 1,Jed,France
+1,1,Jed Dercheese,Jed,France
 2,1,La Rata,Jack,Italy
 3,1,Team 3,Preston,Belgium
 4,1,Stonks,Jackson,Germany
 5,2,Stonks,Jackson,Spain
 6,2,Team 3,Preston,Netherlands
 7,2,La Rata,Jack ,England
-8,2,Team 1,Jed,Sweden
-9,3,Team 1,Jed,Denmark
+8,2,Jed Dercheese,Jed,Sweden
+9,3,Jed Dercheese,Jed,Denmark
 10,3,La Rata,Jack,Croatia
 11,3,Team 3,Preston,Wales
 12,3,Stonks,Jackson,Portugal
 13,4,Stonks,Jackson,Ukraine
 14,4,Team 3,Preston,Austria
 15,4,La Rata,Jack ,Czechia
-16,4,Team 1,Jed,Switzerland
+16,4,Jed Dercheese,Jed,Switzerland
