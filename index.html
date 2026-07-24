@@ -161,6 +161,20 @@
     .dp-title{font-size:12px;font-weight:500;margin-bottom:4px;display:flex;align-items:center;gap:6px;}
     .dp-country{font-size:12px;color:var(--tx2);padding:1px 0;}
 
+    /* Player History cards */
+    .player-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:12px;margin-top:12px;}
+    .player-card{background:var(--bg1);border:0.5px solid var(--bd1);border-radius:var(--r-lg);padding:14px 16px;}
+    .player-card-name{font-size:16px;font-weight:600;margin-bottom:8px;}
+    .player-tourn-list{margin-bottom:4px;}
+    .player-tourn-row{display:flex;align-items:center;gap:10px;padding:7px 0;border-bottom:0.5px solid var(--bd1);}
+    .player-tourn-row:last-child{border-bottom:none;}
+    .pt-info{flex:1;min-width:0;}
+    .pt-tournament{font-size:12px;font-weight:500;}
+    .pt-team{font-size:11px;color:var(--tx3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-top:1px;}
+    .pt-rank{font-size:11px;font-weight:500;color:var(--tx2);background:var(--bg2);border-radius:12px;padding:2px 9px;flex-shrink:0;}
+    .pt-rank.title{background:#fef9e7;color:#b8860b;}
+    .player-subtitle{font-size:11px;font-weight:500;color:var(--tx3);text-transform:uppercase;letter-spacing:.03em;margin:10px 0 4px;}
+
     /* Standings */
     .standings-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:10px;margin-bottom:1.5rem;}
     .group-card{background:var(--bg1);border:0.5px solid var(--bd1);border-radius:var(--r-lg);overflow:hidden;}
@@ -283,8 +297,8 @@
     </div>
 
     <div id="alltime-sub-history" class="subsection active">
-      <div class="section-title" style="margin-top:0">Favorite countries by player</div>
-      <div class="draft-preview" id="alltime-countries"></div>
+      <div class="section-title" style="margin-top:0">Player History</div>
+      <div class="player-grid" id="alltime-countries"></div>
       <div class="section-title">Head-to-head</div>
       <div id="alltime-h2h"></div>
     </div>
@@ -1250,11 +1264,13 @@ function computeAllTimeStats() {
   const players = {}; // name -> { name, totalPoints, tournaments:[], countryCounts:{}, picksTotal, picksGroupWins }
   (allTimeData||[]).forEach(({cfg, teams, groupWinners})=>{
     teams.forEach((t, rank)=>{
-      splitMembers(t.members).forEach(name=>{
+      const names = splitMembers(t.members);
+      names.forEach(name=>{
         if (!players[name]) players[name] = {name, totalPoints:0, tournaments:[], countryCounts:{}, picksTotal:0, picksGroupWins:0};
         const p = players[name];
         p.totalPoints += t.total;
-        p.tournaments.push({label:cfg.label, teamName:t.name, points:t.total, rank:rank+1, of:teams.length});
+        const partner = names.filter(n=>n!==name).join(' & ') || null;
+        p.tournaments.push({label:cfg.label, teamName:t.name, partner, points:t.total, rank:rank+1, of:teams.length});
         t.countries.forEach(c=>{
           p.countryCounts[c]=(p.countryCounts[c]||0)+1;
           p.picksTotal++;
@@ -1307,14 +1323,25 @@ function renderAllTime() {
 
   const players = computeAllTimeStats(); // already sorted by total points
 
-  // ── Player History: favorite countries (top 3) + pick win-rate, per player ──
+  // ── Player History: one card per player ──
   document.getElementById('alltime-countries').innerHTML = players.length ? players.map(p=>{
+    const tournRows = p.tournaments.map(t=>{
+      const isTitle = t.rank===1;
+      return `<div class="player-tourn-row">
+        <div class="pt-info">
+          <div class="pt-tournament">${t.label}</div>
+          <div class="pt-team">${t.teamName}${t.partner?` · with ${t.partner}`:''}</div>
+        </div>
+        <div class="pt-rank${isTitle?' title':''}">#${t.rank}/${t.of}</div>
+      </div>`;
+    }).join('');
     const top = Object.entries(p.countryCounts).sort((a,b)=>b[1]-a[1]).slice(0,3);
-    const winRate = p.picksTotal ? Math.round(100*p.picksGroupWins/p.picksTotal) : null;
-    return `<div class="dp-card">
-      <div class="dp-title">${p.name}</div>
-      ${winRate!==null ? `<div style="font-size:11px;color:var(--tx3);margin:-4px 0 6px">Picks top their group ${winRate}% of the time (${p.picksGroupWins}/${p.picksTotal})</div>` : ''}
-      ${top.map(([country,n])=>`<div class="dp-country">${flag(country)} ${country} <span style="color:var(--tx3)">×${n}</span></div>`).join('')}
+    const picksHTML = top.map(([country,n])=>`<div class="dp-country">${flag(country)} ${country} <span style="color:var(--tx3)">×${n}</span></div>`).join('');
+    return `<div class="player-card">
+      <div class="player-card-name">${p.name}</div>
+      <div class="player-tourn-list">${tournRows}</div>
+      <div class="player-subtitle">Top picks</div>
+      ${picksHTML}
     </div>`;
   }).join('') : '<div class="loading">No data yet</div>';
 
