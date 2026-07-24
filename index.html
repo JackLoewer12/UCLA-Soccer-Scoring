@@ -383,6 +383,27 @@ const WC2026_NAME_MAP = {
   'IR Iran':                  'Iran',
 };
 
+// Canonical country names for cross-tournament statistics. These are applied
+// only after a tournament has been scored against its own draft/fixture names.
+// That keeps source data compatible while preventing historical aliases from
+// appearing as separate countries in All-Time and Draft Statistics.
+const ALL_TIME_COUNTRY_NAME_MAP = {
+  'Czech Republic': 'Czechia',
+  'Turkey': 'Türkiye',
+  'Turkiye': 'Türkiye',
+  'Bosnia & Herzegovina': 'Bosnia and Herzegovina',
+  'Bosnia-Herzegovina': 'Bosnia and Herzegovina',
+  'Korea Republic': 'South Korea',
+  'Republic of Korea': 'South Korea',
+  'United States': 'USA',
+  'United States of America': 'USA',
+  "Côte d'Ivoire": 'Ivory Coast',
+  "Cote d'Ivoire": 'Ivory Coast',
+  'Congo DR': 'DR Congo',
+  'Democratic Republic of Congo': 'DR Congo',
+  'IR Iran': 'Iran',
+};
+
 // ── Tournament registry ────────────────────────────────────────────────────────
 // Each entry fully describes how to load and render one tournament. To add another
 // past tournament: drop its draft.csv/scoring.csv/matches.json into data/<id>/ and
@@ -1230,6 +1251,7 @@ function renderSettings() {
 // fixture source spells some countries differently than its draft.csv; the 2022/2024
 // archives already agree with their draft.csv files, so their nameMap is empty.
 function normName(n){ return (state.cfg.nameMap && state.cfg.nameMap[n]) || n; }
+function canonicalCountryName(n){ return ALL_TIME_COUNTRY_NAME_MAP[n] || n; }
 
 // Normalise all team names in a matches array at ingestion time so every
 // downstream comparison uses draft.csv spellings without extra normName calls.
@@ -1288,9 +1310,9 @@ async function loadTournamentForAllTime(cfg) {
       const countryPts = t.countries.map(c=>{
         const pts = countryStagePoints(c, matches, scoring, scoringLabel).pts;
         total += pts;
-        return {country:c, pts, pick:pickByCountry[c], record: countryMatchRecord(c, matches)};
+        return {country:canonicalCountryName(c), pts, pick:pickByCountry[c], record: countryMatchRecord(c, matches)};
       });
-      return {...t, total, countryPts};
+      return {...t, countries:t.countries.map(canonicalCountryName), total, countryPts};
     });
     // Match the tournament Draft Value ranking: countries are ordered by their
     // final scoring total, with alphabetical order breaking ties consistently.
@@ -1302,7 +1324,7 @@ async function loadTournamentForAllTime(cfg) {
       entry.finishRank = countryFinishRank[entry.country];
     }));
     teamsWithPoints.sort((a,b)=>b.total-a.total);
-    const groupWinners = computeGroupWinners(matches);
+    const groupWinners = new Set([...computeGroupWinners(matches)].map(canonicalCountryName));
     return {cfg, teams: teamsWithPoints, groupWinners};
   } catch(e) {
     return {cfg, teams: [], groupWinners: new Set(), error:true};
