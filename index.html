@@ -301,12 +301,10 @@
       <button class="tab" onclick="showAllTimeTab('tournaments',this)">Tournaments Through the Years</button>
     </div>
 
-    <div id="alltime-sub-history" class="subsection active">
-      <div class="section-title" style="margin-top:0">Player History</div>
-      <div class="player-grid" id="alltime-countries"></div>
-      <div class="section-title">Head-to-head</div>
-      <div id="alltime-h2h"></div>
-    </div>
+      <div id="alltime-sub-history" class="subsection active">
+        <div class="section-title" style="margin-top:0">Player History</div>
+        <div class="player-grid" id="alltime-countries"></div>
+      </div>
 
     <div id="alltime-sub-tournaments" class="subsection">
       <div class="section-title" style="margin-top:0">All-Time Leaderboard</div>
@@ -1337,28 +1335,6 @@ function computeAllTimeStats() {
   return Object.values(players).sort((a,b)=>b.totalPoints-a.totalPoints);
 }
 
-// Every pair of players who've ever been on different draft teams in the same
-// tournament, tallied by who finished with more points that year. Teammates (same
-// draft team, e.g. two partners) are never compared against each other.
-function computeHeadToHead() {
-  const record = {}; // "A|||B" (sorted) -> {pair:[A,B], wins:{A:n,B:m}}
-  (allTimeData||[]).forEach(({teams})=>{
-    const entries = [];
-    teams.forEach((t, rank) => { splitMembers(t.members).forEach(name => entries.push({name, rank, teamName:t.name})); });
-    for (let i=0; i<entries.length; i++) {
-      for (let j=i+1; j<entries.length; j++) {
-        const a=entries[i], b=entries[j];
-        if (a.teamName===b.teamName || a.name===b.name) continue;
-        const key = [a.name,b.name].sort().join('|||');
-        if (!record[key]) record[key] = {pair:[a.name,b.name].sort(), wins:{}};
-        const winner = a.rank<b.rank ? a.name : b.rank<a.rank ? b.name : null;
-        if (winner) record[key].wins[winner] = (record[key].wins[winner]||0)+1;
-      }
-    }
-  });
-  return Object.values(record);
-}
-
 // Which countries have been part of the most title-winning (rank #1) fantasy rosters.
 function computeLuckiestCountries() {
   const counts = {};
@@ -1405,9 +1381,13 @@ function renderAllTime() {
         .sort((a,b)=>a.delta-b.delta || a.pts-b.pts || a.country.localeCompare(b.country))
         .slice(0,3);
       const valueRow = pick => {
-        const direction = pick.delta > 0 ? '▲' : pick.delta < 0 ? '▼' : '•';
-        const difference = pick.delta === 0 ? 'Even' : `${direction} ${Math.abs(pick.delta)}`;
-        return `<div class="player-pick-row"><span>${flag(pick.country)} ${pick.country} <span class="pp-label">(${pick.tournament})</span></span><span class="pp-pts">Pick #${pick.pick} → #${pick.finishRank} · ${difference}</span></div>`;
+        const isUp = pick.delta > 0;
+        const moveLabel = pick.delta === 0 ? 'Even' : `${isUp?'▲':'▼'} ${Math.abs(pick.delta)}`;
+        const moveClass = pick.delta === 0 ? '' : (isUp ? 'up' : 'down');
+        const move = moveClass
+          ? `<span class="perf-move ${moveClass}">${moveLabel}</span>`
+          : `<span class="perf-move" style="color:var(--tx3);background:transparent">Even</span>`;
+        return `<div class="player-pick-row"><span>${flag(pick.country)} ${pick.country} <span class="pp-label">(${pick.tournament})</span></span>${move}</div>`;
       };
       bestWorstHTML = `
         <div class="player-subtitle">Top 3 best picks</div>
@@ -1428,20 +1408,6 @@ function renderAllTime() {
       ${picksHTML}
     </div>`;
   }).join('') : '<div class="loading">No data yet</div>';
-
-  // ── Player History: head-to-head ──
-  const h2h = computeHeadToHead()
-    .map(r=>{ const [a,b]=r.pair; const aw=r.wins[a]||0, bw=r.wins[b]||0; return {a,b,aw,bw,total:aw+bw}; })
-    .filter(r=>r.total>0)
-    .sort((a,b)=>b.total-a.total || Math.abs(b.aw-b.bw)-Math.abs(a.aw-a.bw));
-  document.getElementById('alltime-h2h').innerHTML = h2h.length
-    ? `<div class="nation-table">${h2h.map(r=>`
-        <div class="nation-row">
-          <div class="nation-name">${r.aw>=r.bw?`<strong>${r.a}</strong>`:r.a} <span style="color:var(--tx3)">vs</span> ${r.bw>r.aw?`<strong>${r.b}</strong>`:r.b}</div>
-          <div class="nation-team">${r.total} tournament${r.total===1?'':'s'} together</div>
-          <div class="nation-pts">${r.aw} – ${r.bw}</div>
-        </div>`).join('')}</div>`
-    : '<div style="padding:14px;font-size:13px;color:var(--tx3);text-align:center">Not enough shared tournaments yet</div>';
 
   // ── Tournaments Through the Years: All-Time Leaderboard, ranked by titles ──
   const byTitles = [...players].sort((a,b)=>{
