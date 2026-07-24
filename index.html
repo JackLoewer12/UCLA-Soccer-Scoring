@@ -155,6 +155,11 @@
     .scoring-table th{text-align:left;font-weight:500;font-size:11px;color:var(--tx2);text-transform:uppercase;letter-spacing:.05em;padding:6px 10px;background:var(--bg2);}
     .scoring-table td{padding:8px 10px;border-top:0.5px solid var(--bd1);color:var(--tx1);}
     .scoring-table tr:first-child td{border-top:none;}
+    .draft-guide-table{width:100%;border-collapse:collapse;font-size:13px;background:var(--bg1);border:0.5px solid var(--bd1);border-radius:var(--r-lg);overflow:hidden;}
+    .draft-guide-table th{text-align:left;font-weight:500;font-size:11px;color:var(--tx2);text-transform:uppercase;letter-spacing:.05em;padding:8px 12px;background:var(--bg2);}
+    .draft-guide-table th:not(:first-child),.draft-guide-table td:not(:first-child){text-align:center;}
+    .draft-guide-table td{padding:8px 12px;border-top:0.5px solid var(--bd1);}
+    .draft-guide-team{display:flex;align-items:center;gap:8px;}
     .pts-badge{display:inline-block;background:var(--green);color:#fff;border-radius:20px;padding:2px 10px;font-size:12px;font-weight:500;}
     .draft-preview{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:8px;margin-top:12px;}
     .dp-card{background:var(--bg2);border-radius:var(--r-md);padding:10px 12px;}
@@ -328,6 +333,8 @@
       <div id="alltime-overhyped"></div>
       <div class="section-title">Luckiest countries</div>
       <div id="alltime-luckiest"></div>
+      <div class="section-title">Draft guide</div>
+      <div id="alltime-draft-guide"></div>
     </div>
   </div>
 
@@ -1377,14 +1384,16 @@ function computeCountryDraftValue() {
   (allTimeData||[]).forEach(({teams})=>{
     teams.forEach(team => (team.countryPts||[]).forEach(({country, pick, finishRank}) => {
       if (!Number.isFinite(pick) || !Number.isFinite(finishRank)) return;
-      if (!values[country]) values[country] = {country, totalDelta:0, appearances:0};
+      if (!values[country]) values[country] = {country, totalDelta:0, totalPick:0, appearances:0};
       values[country].totalDelta += pick - finishRank;
+      values[country].totalPick += pick;
       values[country].appearances++;
     }));
   });
   return Object.values(values).map(value => ({
     ...value,
     averageDelta: value.totalDelta / value.appearances,
+    averagePick: value.totalPick / value.appearances,
   }));
 }
 
@@ -1555,6 +1564,27 @@ function renderAllTime() {
           <div class="nation-pts">${n} title${n===1?'':'s'}</div>
         </div>`).join('')}</div>`
     : '<div style="padding:14px;font-size:13px;color:var(--tx3);text-align:center">No titles decided yet</div>';
+
+  const draftGuide = [...countryDraftValue]
+    .sort((a,b)=>a.averagePick-b.averagePick || a.country.localeCompare(b.country));
+  document.getElementById('alltime-draft-guide').innerHTML = draftGuide.length
+    ? `<table class="draft-guide-table">
+        <thead><tr><th>Team</th><th>Avg. draft place</th><th>Avg. movement</th></tr></thead>
+        <tbody>${draftGuide.map(country=>{
+          const isUp = country.averageDelta > 0;
+          const isDown = country.averageDelta < 0;
+          const movement = isUp || isDown ? `${isUp?'▲':'▼'} ${Math.abs(country.averageDelta).toFixed(1)}` : 'Even';
+          const badge = isUp || isDown
+            ? `<span class="perf-move ${isUp?'up':'down'}">${movement}</span>`
+            : '<span class="perf-move" style="color:var(--tx3);background:transparent">Even</span>';
+          return `<tr>
+            <td><div class="draft-guide-team"><span class="nation-flag">${flag(country.country)}</span><span>${country.country}</span></div></td>
+            <td>${country.averagePick.toFixed(1)}</td>
+            <td>${badge}</td>
+          </tr>`;
+        }).join('')}</tbody>
+      </table>`
+    : '<div style="padding:14px;font-size:13px;color:var(--tx3);text-align:center">No draft data yet</div>';
 }
 
 
