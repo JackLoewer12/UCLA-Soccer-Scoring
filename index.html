@@ -38,6 +38,7 @@
     .tab.active{color:var(--green);border-bottom-color:var(--green);font-weight:500;}
     .tab:hover:not(.active){color:var(--tx1);}
     .section{display:none;}.section.active{display:block;}
+    .subsection{display:none;}.subsection.active{display:block;}
 
     /* Section titles */
     .section-title{font-size:13px;font-weight:500;color:var(--tx2);text-transform:uppercase;letter-spacing:.06em;margin:1.75rem 0 .75rem;}
@@ -275,10 +276,25 @@
       <button class="btn-ref" onclick="loadAllTime(true)"><i class="ti ti-refresh" id="ref-icon3" aria-hidden="true"></i> Refresh</button>
       <span id="alltime-status" style="font-size:12px;color:var(--tx3)"></span>
     </div>
-    <div class="section-title" style="margin-top:0">All-time points</div>
-    <div id="alltime-leaderboard"><div class="loading">Loading…</div></div>
-    <div class="section-title">Favorite countries by player</div>
-    <div class="draft-preview" id="alltime-countries"></div>
+
+    <div class="tabs" id="alltime-subtabs" style="margin-bottom:1.5rem">
+      <button class="tab active" onclick="showAllTimeTab('history',this)">Player History</button>
+      <button class="tab" onclick="showAllTimeTab('tournaments',this)">Tournaments Through the Years</button>
+    </div>
+
+    <div id="alltime-sub-history" class="subsection active">
+      <div class="section-title" style="margin-top:0">Favorite countries by player</div>
+      <div class="draft-preview" id="alltime-countries"></div>
+      <div class="section-title">Head-to-head</div>
+      <div id="alltime-h2h"></div>
+    </div>
+
+    <div id="alltime-sub-tournaments" class="subsection">
+      <div class="section-title" style="margin-top:0">All-Time Leaderboard</div>
+      <div id="alltime-leaderboard"><div class="loading">Loading…</div></div>
+      <div class="section-title">Luckiest countries</div>
+      <div id="alltime-luckiest"></div>
+    </div>
   </div>
 
   <!-- SETTINGS -->
@@ -567,7 +583,7 @@ function switchTournament(id) {
   if (cameFromAllTime) {
     document.querySelectorAll('.section').forEach(s=>s.classList.remove('active'));
     document.getElementById('tab-leaderboard').classList.add('active');
-    document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
+    document.querySelectorAll('#tabs-bar .tab').forEach(t=>t.classList.remove('active'));
     document.querySelector('#tabs-bar .tab').classList.add('active');
   }
 
@@ -1213,9 +1229,10 @@ async function loadTournamentForAllTime(cfg) {
       return {...t, total};
     });
     teamsWithPoints.sort((a,b)=>b.total-a.total);
-    return {cfg, teams: teamsWithPoints};
+    const groupWinners = computeGroupWinners(matches);
+    return {cfg, teams: teamsWithPoints, groupWinners};
   } catch(e) {
-    return {cfg, teams: [], error:true};
+    return {cfg, teams: [], groupWinners: new Set(), error:true};
   }
 }
 
@@ -1230,19 +1247,55 @@ async function loadAllTime(force) {
 }
 
 function computeAllTimeStats() {
-  const players = {}; // name -> { name, totalPoints, tournaments:[], countryCounts:{} }
-  (allTimeData||[]).forEach(({cfg, teams})=>{
+  const players = {}; // name -> { name, totalPoints, tournaments:[], countryCounts:{}, picksTotal, picksGroupWins }
+  (allTimeData||[]).forEach(({cfg, teams, groupWinners})=>{
     teams.forEach((t, rank)=>{
       splitMembers(t.members).forEach(name=>{
-        if (!players[name]) players[name] = {name, totalPoints:0, tournaments:[], countryCounts:{}};
+        if (!players[name]) players[name] = {name, totalPoints:0, tournaments:[], countryCounts:{}, picksTotal:0, picksGroupWins:0};
         const p = players[name];
         p.totalPoints += t.total;
         p.tournaments.push({label:cfg.label, teamName:t.name, points:t.total, rank:rank+1, of:teams.length});
-        t.countries.forEach(c=>{ p.countryCounts[c]=(p.countryCounts[c]||0)+1; });
+        t.countries.forEach(c=>{
+          p.countryCounts[c]=(p.countryCounts[c]||0)+1;
+          p.picksTotal++;
+          if (groupWinners && groupWinners.has(c)) p.picksGroupWins++;
+        });
       });
     });
   });
   return Object.values(players).sort((a,b)=>b.totalPoints-a.totalPoints);
+}
+
+// Every pair of players who've ever been on different draft teams in the same
+// tournament, tallied by who finished with more points that year. Teammates (same
+// draft team, e.g. two partners) are never compared against each other.
+function computeHeadToHead() {
+  const record = {}; // "A|||B" (sorted) -> {pair:[A,B], wins:{A:n,B:m}}
+  (allTimeData||[]).forEach(({teams})=>{
+    const entries = [];
+    teams.forEach((t, rank) => { splitMembers(t.members).forEach(name => entries.push({name, rank, teamName:t.name})); });
+    for (let i=0; i<entries.length; i++) {
+      for (let j=i+1; j<entries.length; j++) {
+        const a=entries[i], b=entries[j];
+        if (a.teamName===b.teamName || a.name===b.name) continue;
+        const key = [a.name,b.name].sort().join('|||');
+        if (!record[key]) record[key] = {pair:[a.name,b.name].sort(), wins:{}};
+        const winner = a.rank<b.rank ? a.name : b.rank<a.rank ? b.name : null;
+        if (winner) record[key].wins[winner] = (record[key].wins[winner]||0)+1;
+      }
+    }
+  });
+  return Object.values(record);
+}
+
+// Which countries have been part of the most title-winning (rank #1) fantasy rosters.
+function computeLuckiestCountries() {
+  const counts = {};
+  (allTimeData||[]).forEach(({teams})=>{
+    if (!teams.length) return;
+    teams[0].countries.forEach(c => { counts[c]=(counts[c]||0)+1; });
+  });
+  return Object.entries(counts).sort((a,b)=>b[1]-a[1] || a[0].localeCompare(b[0]));
 }
 
 function renderAllTime() {
@@ -1252,60 +1305,84 @@ function renderAllTime() {
     ? `Loaded ${allTimeData.length-failed.length}/${allTimeData.length} tournaments — couldn't load ${failed.join(', ')}`
     : `Across all ${allTimeData.length} tournaments`;
 
-  const players = computeAllTimeStats();
+  const players = computeAllTimeStats(); // already sorted by total points
 
-  document.getElementById('alltime-leaderboard').innerHTML = players.length ? players.map((p,rank)=>{
+  // ── Player History: favorite countries (top 3) + pick win-rate, per player ──
+  document.getElementById('alltime-countries').innerHTML = players.length ? players.map(p=>{
+    const top = Object.entries(p.countryCounts).sort((a,b)=>b[1]-a[1]).slice(0,3);
+    const winRate = p.picksTotal ? Math.round(100*p.picksGroupWins/p.picksTotal) : null;
+    return `<div class="dp-card">
+      <div class="dp-title">${p.name}</div>
+      ${winRate!==null ? `<div style="font-size:11px;color:var(--tx3);margin:-4px 0 6px">Picks top their group ${winRate}% of the time (${p.picksGroupWins}/${p.picksTotal})</div>` : ''}
+      ${top.map(([country,n])=>`<div class="dp-country">${flag(country)} ${country} <span style="color:var(--tx3)">×${n}</span></div>`).join('')}
+    </div>`;
+  }).join('') : '<div class="loading">No data yet</div>';
+
+  // ── Player History: head-to-head ──
+  const h2h = computeHeadToHead()
+    .map(r=>{ const [a,b]=r.pair; const aw=r.wins[a]||0, bw=r.wins[b]||0; return {a,b,aw,bw,total:aw+bw}; })
+    .filter(r=>r.total>0)
+    .sort((a,b)=>b.total-a.total || Math.abs(b.aw-b.bw)-Math.abs(a.aw-a.bw));
+  document.getElementById('alltime-h2h').innerHTML = h2h.length
+    ? `<div class="nation-table">${h2h.map(r=>`
+        <div class="nation-row">
+          <div class="nation-name">${r.aw>=r.bw?`<strong>${r.a}</strong>`:r.a} <span style="color:var(--tx3)">vs</span> ${r.bw>r.aw?`<strong>${r.b}</strong>`:r.b}</div>
+          <div class="nation-team">${r.total} tournament${r.total===1?'':'s'} together</div>
+          <div class="nation-pts">${r.aw} – ${r.bw}</div>
+        </div>`).join('')}</div>`
+    : '<div style="padding:14px;font-size:13px;color:var(--tx3);text-align:center">Not enough shared tournaments yet</div>';
+
+  // ── Tournaments Through the Years: All-Time Leaderboard, ranked by titles ──
+  const byTitles = [...players].sort((a,b)=>{
+    const ta = a.tournaments.filter(t=>t.rank===1).length;
+    const tb = b.tournaments.filter(t=>t.rank===1).length;
+    if (tb!==ta) return tb-ta;
+    return b.totalPoints-a.totalPoints; // hidden tiebreak only, not displayed
+  });
+  document.getElementById('alltime-leaderboard').innerHTML = byTitles.length ? byTitles.map((p,rank)=>{
     const rc=rank===0?'r1':rank===1?'r2':rank===2?'r3':'';
     const titles = p.tournaments.filter(t=>t.rank===1).length;
-    const perT = p.tournaments.map(t=>
-      `<span class="pill"><strong>${t.points}</strong> ${t.label} (#${t.rank}/${t.of})</span>`).join('');
+    const perT = p.tournaments.map(t=>`<span class="pill">${t.label} <strong>#${t.rank}</strong>/${t.of}</span>`).join('');
     return `<div class="lb-card ${rc}">
       <div class="lb-row">
         <div class="rnk">${rank+1}</div>
         <div>
           <div class="tname">${p.name}</div>
-          <div class="tmems">${p.tournaments.length} tournament${p.tournaments.length===1?'':'s'} played${titles?` · ${titles} title${titles===1?'':'s'}`:''}</div>
+          <div class="tmems">${p.tournaments.length} tournament${p.tournaments.length===1?'':'s'} played</div>
         </div>
-        <div class="tpts">${p.totalPoints} <span>pts</span></div>
+        <div class="tpts">${titles} <span>title${titles===1?'':'s'}</span></div>
       </div>
       <div class="pills">${perT}</div>
     </div>`;
   }).join('') : '<div class="loading">No data yet</div>';
 
-  document.getElementById('alltime-countries').innerHTML = players.length ? players.map(p=>{
-    const top = Object.entries(p.countryCounts).sort((a,b)=>b[1]-a[1]).slice(0,4);
-    return `<div class="dp-card">
-      <div class="dp-title">${p.name}</div>
-      ${top.map(([country,n])=>`<div class="dp-country">${flag(country)} ${country} <span style="color:var(--tx3)">×${n}</span></div>`).join('')}
-    </div>`;
-  }).join('') : '';
+  // ── Tournaments Through the Years: luckiest countries ──
+  const luckiest = computeLuckiestCountries().slice(0,10);
+  document.getElementById('alltime-luckiest').innerHTML = luckiest.length
+    ? `<div class="nation-table">${luckiest.map(([country,n],i)=>`
+        <div class="nation-row">
+          <div class="nation-rank">${i+1}</div>
+          <div class="nation-flag">${flag(country)}</div>
+          <div class="nation-name">${country}</div>
+          <div class="nation-pts">${n} title${n===1?'':'s'}</div>
+        </div>`).join('')}</div>`
+    : '<div style="padding:14px;font-size:13px;color:var(--tx3);text-align:center">No titles decided yet</div>';
 }
 
 
-function renderStandings() {
-  if (!state.matches.length && !state.teams.length) {
-    document.getElementById('standings-body').innerHTML = '<div class="loading">Loading…</div>';
-    return;
-  }
-  document.getElementById('last-updated2').textContent =
-    document.getElementById('last-updated').textContent;
-
-  // Gather all group-stage matches, build per-group team records
-  const groupMatches = state.matches.filter(m => m.group && m.group.startsWith('Group'));
-
-  // Identify groups and teams
-  const groupTeams = {}; // groupName → Set of team names (as in fixture JSON)
+// ── Group standings (shared) ──────────────────────────────────────────────────
+// Pure: builds { groupTeams, records } from a matches array — same win/draw/loss/
+// goal-difference bookkeeping used by both the Group Standings tab and the All
+// Time "win rate on picks" stat.
+function buildGroupRecords(matches) {
+  const groupMatches = matches.filter(m => m.group && m.group.startsWith('Group'));
+  const groupTeams = {};
   groupMatches.forEach(m => {
     if (!groupTeams[m.group]) groupTeams[m.group] = new Set();
-    groupTeams[m.group].add(m.team1);
-    groupTeams[m.group].add(m.team2);
+    groupTeams[m.group].add(m.team1); groupTeams[m.group].add(m.team2);
   });
-
-  // Calculate standings record for each team
-  // record: { mp, w, d, l, gf, ga, pts }
   function emptyRecord(){ return {mp:0,w:0,d:0,l:0,gf:0,ga:0,pts:0}; }
-
-  const records = {}; // teamName → record
+  const records = {};
   groupMatches.forEach(m => {
     if (!m.score) return;
     const sc = m.score.ft || m.score;
@@ -1315,20 +1392,46 @@ function renderStandings() {
     records[m.team1].mp++; records[m.team2].mp++;
     records[m.team1].gf += g1; records[m.team1].ga += g2;
     records[m.team2].gf += g2; records[m.team2].ga += g1;
-    if (g1 > g2) {
-      records[m.team1].w++; records[m.team1].pts += 3;
-      records[m.team2].l++;
-    } else if (g2 > g1) {
-      records[m.team2].w++; records[m.team2].pts += 3;
-      records[m.team1].l++;
-    } else {
-      records[m.team1].d++; records[m.team1].pts++;
-      records[m.team2].d++; records[m.team2].pts++;
-    }
+    if (g1 > g2) { records[m.team1].w++; records[m.team1].pts += 3; records[m.team2].l++; }
+    else if (g2 > g1) { records[m.team2].w++; records[m.team2].pts += 3; records[m.team1].l++; }
+    else { records[m.team1].d++; records[m.team1].pts++; records[m.team2].d++; records[m.team2].pts++; }
   });
+  return {groupTeams, records};
+}
+function sortGroupTeams(teamsArr, records) {
+  function emptyRecord(){ return {mp:0,w:0,d:0,l:0,gf:0,ga:0,pts:0}; }
+  return [...teamsArr].sort((a,b) => {
+    const ra = records[a] || emptyRecord(), rb = records[b] || emptyRecord();
+    if (rb.pts !== ra.pts) return rb.pts - ra.pts;
+    const gdA = ra.gf-ra.ga, gdB = rb.gf-rb.ga;
+    if (gdB !== gdA) return gdB - gdA;
+    return rb.gf - ra.gf;
+  });
+}
+// The set of countries that finished top of their group (used for the All Time
+// "win rate on picks" stat — a country doesn't need to win the tournament to count
+// here, just top its group).
+function computeGroupWinners(matches) {
+  const {groupTeams, records} = buildGroupRecords(matches);
+  const winners = new Set();
+  Object.keys(groupTeams).forEach(grp => {
+    const sorted = sortGroupTeams([...groupTeams[grp]], records);
+    if (sorted.length) winners.add(sorted[0]);
+  });
+  return winners;
+}
 
-  // Build sorted group tables
+function renderStandings() {
+  if (!state.matches.length && !state.teams.length) {
+    document.getElementById('standings-body').innerHTML = '<div class="loading">Loading…</div>';
+    return;
+  }
+  document.getElementById('last-updated2').textContent =
+    document.getElementById('last-updated').textContent;
+
+  const {groupTeams, records} = buildGroupRecords(state.matches);
   const sortedGroups = Object.keys(groupTeams).sort();
+  function emptyRecord(){ return {mp:0,w:0,d:0,l:0,gf:0,ga:0,pts:0}; }
 
   // Draft team lookup (using normalised names)
   function getDraftTeam(fixtureName) {
@@ -1346,15 +1449,7 @@ function renderStandings() {
   </div>`;
 
   const groupsHTML = sortedGroups.map(grpName => {
-    const teams = [...groupTeams[grpName]];
-    const sorted = [...teams].sort((a, b) => {
-      const ra = records[a] || emptyRecord();
-      const rb = records[b] || emptyRecord();
-      if (rb.pts !== ra.pts) return rb.pts - ra.pts;
-      const gdA = ra.gf - ra.ga, gdB = rb.gf - rb.ga;
-      if (gdB !== gdA) return gdB - gdA;
-      return rb.gf - ra.gf;
-    });
+    const sorted = sortGroupTeams([...groupTeams[grpName]], records);
 
     const rows = sorted.map((team, i) => {
       const r = records[team] || emptyRecord();
@@ -1410,7 +1505,7 @@ function renderStandings() {
 // ── Tabs ──────────────────────────────────────────────────────────────────────
 function showTab(name, btn) {
   document.querySelectorAll('.section').forEach(s=>s.classList.remove('active'));
-  document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
+  document.querySelectorAll('#tabs-bar .tab').forEach(t=>t.classList.remove('active'));
   document.getElementById('tab-'+name).classList.add('active');
   btn.classList.add('active');
   if (name==='leaderboard') renderLeaderboard();
@@ -1419,6 +1514,13 @@ function showTab(name, btn) {
   if (name==='rosters') renderRosters();
   if (name==='standings') renderStandings();
   if (name==='settings') renderSettings();
+}
+
+function showAllTimeTab(name, btn) {
+  document.querySelectorAll('#alltime-subtabs .tab').forEach(t=>t.classList.remove('active'));
+  document.querySelectorAll('.subsection').forEach(s=>s.classList.remove('active'));
+  document.getElementById('alltime-sub-'+name).classList.add('active');
+  btn.classList.add('active');
 }
 
 // ── Boot ──────────────────────────────────────────────────────────────────────
