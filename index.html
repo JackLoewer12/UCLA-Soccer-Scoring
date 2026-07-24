@@ -1259,15 +1259,26 @@ async function loadTournamentForAllTime(cfg) {
     const {scoring, scoringLabel} = parseScoringRows(parseCSV(scoringText));
     const matches = normMatches(fixturesJson.matches||[], cfg.nameMap);
     const {teams} = deriveTeams(draftRows);
+    const pickByCountry = {};
+    draftRows.forEach(row => { pickByCountry[row.country] = parseInt(row.pick, 10); });
     const teamsWithPoints = teams.map(t=>{
       let total=0;
       const countryPts = t.countries.map(c=>{
         const pts = countryStagePoints(c, matches, scoring, scoringLabel).pts;
         total += pts;
-        return {country:c, pts, record: countryMatchRecord(c, matches)};
+        return {country:c, pts, pick:pickByCountry[c], record: countryMatchRecord(c, matches)};
       });
       return {...t, total, countryPts};
     });
+    // Match the tournament Draft Value ranking: countries are ordered by their
+    // final scoring total, with alphabetical order breaking ties consistently.
+    const countryFinishRank = {};
+    teamsWithPoints.flatMap(t => t.countryPts)
+      .sort((a,b)=>b.pts-a.pts || a.country.localeCompare(b.country))
+      .forEach((entry, index) => { countryFinishRank[entry.country] = index + 1; });
+    teamsWithPoints.forEach(t => t.countryPts.forEach(entry => {
+      entry.finishRank = countryFinishRank[entry.country];
+    }));
     teamsWithPoints.sort((a,b)=>b.total-a.total);
     const groupWinners = computeGroupWinners(matches);
     return {cfg, teams: teamsWithPoints, groupWinners};
@@ -1306,11 +1317,18 @@ function computeAllTimeStats() {
         p.totalPoints += t.total;
         const partner = names.filter(n=>n!==name).join(' & ') || null;
         p.tournaments.push({label:cfg.label, teamName:t.name, partner, points:t.total, rank:rank+1, of:teams.length});
-        (t.countryPts||[]).forEach(({country, pts, record})=>{
+        (t.countryPts||[]).forEach(({country, pts, pick, finishRank, record})=>{
           p.countryCounts[country]=(p.countryCounts[country]||0)+1;
           p.picksTotal++;
           if (groupWinners && groupWinners.has(country)) p.picksGroupWins++;
-          p.picks.push({tournament:cfg.label, country, pts});
+          p.picks.push({
+            tournament:cfg.label,
+            country,
+            pts,
+            pick,
+            finishRank,
+            delta: pick - finishRank, // positive = outperformed its draft position
+          });
           p.record.w += record.w; p.record.d += record.d; p.record.l += record.l;
         });
       });
@@ -1378,13 +1396,24 @@ function renderAllTime() {
     const recordHTML = `<div class="player-record"><strong>${r.w}W</strong> – <strong>${r.d}D</strong> – <strong>${r.l}L</strong> across every country drafted</div>`;
 
     let bestWorstHTML = '';
-    if (p.picks.length) {
-      const best = p.picks.reduce((a,b)=>b.pts>a.pts?b:a);
-      const worst = p.picks.reduce((a,b)=>b.pts<a.pts?b:a);
+    const valuePicks = p.picks.filter(pick => Number.isFinite(pick.pick) && Number.isFinite(pick.finishRank));
+    if (valuePicks.length) {
+      const best = [...valuePicks]
+        .sort((a,b)=>b.delta-a.delta || b.pts-a.pts || a.country.localeCompare(b.country))
+        .slice(0,3);
+      const worst = [...valuePicks]
+        .sort((a,b)=>a.delta-b.delta || a.pts-b.pts || a.country.localeCompare(b.country))
+        .slice(0,3);
+      const valueRow = pick => {
+        const direction = pick.delta > 0 ? '▲' : pick.delta < 0 ? '▼' : '•';
+        const difference = pick.delta === 0 ? 'Even' : `${direction} ${Math.abs(pick.delta)}`;
+        return `<div class="player-pick-row"><span>${flag(pick.country)} ${pick.country} <span class="pp-label">(${pick.tournament})</span></span><span class="pp-pts">Pick #${pick.pick} → #${pick.finishRank} · ${difference}</span></div>`;
+      };
       bestWorstHTML = `
-        <div class="player-subtitle">Best &amp; worst picks</div>
-        <div class="player-pick-row"><span>${flag(best.country)} ${best.country} <span class="pp-label">(${best.tournament})</span></span><span class="pp-pts">${best.pts} pts</span></div>
-        <div class="player-pick-row"><span>${flag(worst.country)} ${worst.country} <span class="pp-label">(${worst.tournament})</span></span><span class="pp-pts">${worst.pts} pts</span></div>`;
+        <div class="player-subtitle">Top 3 best picks</div>
+        ${best.map(valueRow).join('')}
+        <div class="player-subtitle">Top 3 worst picks</div>
+        ${worst.map(valueRow).join('')}`;
     }
 
     const top = Object.entries(p.countryCounts).sort((a,b)=>b[1]-a[1]).slice(0,3);
