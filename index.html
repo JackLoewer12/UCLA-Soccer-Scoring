@@ -163,8 +163,10 @@
 
     /* Player History cards */
     .player-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:12px;margin-top:12px;}
-    .player-card{background:var(--bg1);border:0.5px solid var(--bd1);border-radius:var(--r-lg);padding:14px 16px;}
-    .player-card-name{font-size:16px;font-weight:600;margin-bottom:8px;}
+    .player-card{background:var(--bg1);border:0.5px solid var(--bd1);border-radius:var(--r-lg);padding:14px 16px;border-left:3px solid var(--tx3);}
+    .player-card-name{font-size:16px;font-weight:600;margin-bottom:2px;}
+    .player-record{font-size:11px;color:var(--tx2);margin-bottom:8px;}
+    .player-record strong{color:var(--tx1);}
     .player-tourn-list{margin-bottom:4px;}
     .player-tourn-row{display:flex;align-items:center;gap:10px;padding:7px 0;border-bottom:0.5px solid var(--bd1);}
     .player-tourn-row:last-child{border-bottom:none;}
@@ -174,6 +176,9 @@
     .pt-rank{font-size:11px;font-weight:500;color:var(--tx2);background:var(--bg2);border-radius:12px;padding:2px 9px;flex-shrink:0;}
     .pt-rank.title{background:#fef9e7;color:#b8860b;}
     .player-subtitle{font-size:11px;font-weight:500;color:var(--tx3);text-transform:uppercase;letter-spacing:.03em;margin:10px 0 4px;}
+    .player-pick-row{display:flex;justify-content:space-between;align-items:center;font-size:12px;padding:2px 0;}
+    .player-pick-row .pp-label{color:var(--tx3);}
+    .player-pick-row .pp-pts{font-weight:500;}
 
     /* Standings */
     .standings-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:10px;margin-bottom:1.5rem;}
@@ -1224,6 +1229,23 @@ function splitMembers(members) {
   return (members||'').split(/\s*(?:&|,|\band\b)\s*/i).map(s=>s.trim()).filter(Boolean);
 }
 
+// Overall win/draw/loss record for a country across every match it played (group
+// stage AND knockout) — used for the All Time "team performance record" stat.
+// Knockout draws are always resolved by winner() via ET/pens in this data, so a
+// "tie" here only ever comes from a genuine group-stage draw.
+function countryMatchRecord(country, matches) {
+  let w=0, d=0, l=0;
+  matches.forEach(m=>{
+    if (m.team1!==country && m.team2!==country) return;
+    if (!m.score) return;
+    if (isDraw(m)) { d++; return; }
+    const win = winner(m);
+    if (!win) return;
+    if (win===country) w++; else l++;
+  });
+  return {w,d,l};
+}
+
 let allTimeData = null; // cached: [{cfg, teams:[{...,total,members,countries}]}, ...] across every tournament
 
 async function loadTournamentForAllTime(cfg) {
@@ -1239,8 +1261,12 @@ async function loadTournamentForAllTime(cfg) {
     const {teams} = deriveTeams(draftRows);
     const teamsWithPoints = teams.map(t=>{
       let total=0;
-      t.countries.forEach(c=>{ total += countryStagePoints(c, matches, scoring, scoringLabel).pts; });
-      return {...t, total};
+      const countryPts = t.countries.map(c=>{
+        const pts = countryStagePoints(c, matches, scoring, scoringLabel).pts;
+        total += pts;
+        return {country:c, pts, record: countryMatchRecord(c, matches)};
+      });
+      return {...t, total, countryPts};
     });
     teamsWithPoints.sort((a,b)=>b.total-a.total);
     const groupWinners = computeGroupWinners(matches);
@@ -1260,21 +1286,32 @@ async function loadAllTime(force) {
   renderAllTime();
 }
 
+// Deterministic per-player card color — same player always gets the same color
+// regardless of leaderboard order. Jack's is fixed to green per request.
+const PLAYER_CARD_PALETTE = ['#3a86ff','#e85d04','#8338ec','#f59e0b','#06b6d4','#ec4899','#84cc16','#f43f5e','#a855f7','#0ea5e9'];
+function playerCardColor(name) {
+  if (name.trim().toLowerCase()==='jack') return '#2d6a4f';
+  let hash=0; for (let i=0;i<name.length;i++) hash=(hash*31+name.charCodeAt(i))>>>0;
+  return PLAYER_CARD_PALETTE[hash % PLAYER_CARD_PALETTE.length];
+}
+
 function computeAllTimeStats() {
-  const players = {}; // name -> { name, totalPoints, tournaments:[], countryCounts:{}, picksTotal, picksGroupWins }
+  const players = {}; // name -> { name, totalPoints, tournaments:[], countryCounts:{}, picks:[], record:{w,d,l}, picksTotal, picksGroupWins }
   (allTimeData||[]).forEach(({cfg, teams, groupWinners})=>{
     teams.forEach((t, rank)=>{
       const names = splitMembers(t.members);
       names.forEach(name=>{
-        if (!players[name]) players[name] = {name, totalPoints:0, tournaments:[], countryCounts:{}, picksTotal:0, picksGroupWins:0};
+        if (!players[name]) players[name] = {name, totalPoints:0, tournaments:[], countryCounts:{}, picks:[], record:{w:0,d:0,l:0}, picksTotal:0, picksGroupWins:0};
         const p = players[name];
         p.totalPoints += t.total;
         const partner = names.filter(n=>n!==name).join(' & ') || null;
         p.tournaments.push({label:cfg.label, teamName:t.name, partner, points:t.total, rank:rank+1, of:teams.length});
-        t.countries.forEach(c=>{
-          p.countryCounts[c]=(p.countryCounts[c]||0)+1;
+        (t.countryPts||[]).forEach(({country, pts, record})=>{
+          p.countryCounts[country]=(p.countryCounts[country]||0)+1;
           p.picksTotal++;
-          if (groupWinners && groupWinners.has(c)) p.picksGroupWins++;
+          if (groupWinners && groupWinners.has(country)) p.picksGroupWins++;
+          p.picks.push({tournament:cfg.label, country, pts});
+          p.record.w += record.w; p.record.d += record.d; p.record.l += record.l;
         });
       });
     });
@@ -1325,6 +1362,7 @@ function renderAllTime() {
 
   // ── Player History: one card per player ──
   document.getElementById('alltime-countries').innerHTML = players.length ? players.map(p=>{
+    const color = playerCardColor(p.name);
     const tournRows = p.tournaments.map(t=>{
       const isTitle = t.rank===1;
       return `<div class="player-tourn-row">
@@ -1335,12 +1373,29 @@ function renderAllTime() {
         <div class="pt-rank${isTitle?' title':''}">#${t.rank}/${t.of}</div>
       </div>`;
     }).join('');
+
+    const r = p.record;
+    const recordHTML = `<div class="player-record"><strong>${r.w}W</strong> – <strong>${r.d}D</strong> – <strong>${r.l}L</strong> across every country drafted</div>`;
+
+    let bestWorstHTML = '';
+    if (p.picks.length) {
+      const best = p.picks.reduce((a,b)=>b.pts>a.pts?b:a);
+      const worst = p.picks.reduce((a,b)=>b.pts<a.pts?b:a);
+      bestWorstHTML = `
+        <div class="player-subtitle">Best &amp; worst picks</div>
+        <div class="player-pick-row"><span>${flag(best.country)} ${best.country} <span class="pp-label">(${best.tournament})</span></span><span class="pp-pts">${best.pts} pts</span></div>
+        <div class="player-pick-row"><span>${flag(worst.country)} ${worst.country} <span class="pp-label">(${worst.tournament})</span></span><span class="pp-pts">${worst.pts} pts</span></div>`;
+    }
+
     const top = Object.entries(p.countryCounts).sort((a,b)=>b[1]-a[1]).slice(0,3);
     const picksHTML = top.map(([country,n])=>`<div class="dp-country">${flag(country)} ${country} <span style="color:var(--tx3)">×${n}</span></div>`).join('');
-    return `<div class="player-card">
-      <div class="player-card-name">${p.name}</div>
+
+    return `<div class="player-card" style="background:${color}17;border-left:3px solid ${color}">
+      <div class="player-card-name" style="color:${color}">${p.name}</div>
+      ${recordHTML}
       <div class="player-tourn-list">${tournRows}</div>
-      <div class="player-subtitle">Top picks</div>
+      ${bestWorstHTML}
+      <div class="player-subtitle">Favorite Teams</div>
       ${picksHTML}
     </div>`;
   }).join('') : '<div class="loading">No data yet</div>';
