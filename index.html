@@ -162,7 +162,7 @@
     .dp-country{font-size:12px;color:var(--tx2);padding:1px 0;}
 
     /* Player History cards */
-    .player-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:12px;margin-top:12px;}
+    .player-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px;margin-top:12px;}
     .player-card{background:var(--bg1);border:0.5px solid var(--bd1);border-radius:var(--r-lg);padding:14px 16px;border-left:3px solid var(--tx3);}
     .player-card-name{font-size:16px;font-weight:600;margin-bottom:2px;}
     .player-record{font-size:11px;color:var(--tx2);margin-bottom:8px;}
@@ -173,8 +173,11 @@
     .pt-info{flex:1;min-width:0;}
     .pt-tournament{font-size:12px;font-weight:500;}
     .pt-team{font-size:11px;color:var(--tx3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-top:1px;}
-    .pt-rank{font-size:11px;font-weight:500;color:var(--tx2);background:var(--bg2);border-radius:12px;padding:2px 9px;flex-shrink:0;}
-    .pt-rank.title{background:#fef9e7;color:#b8860b;}
+    .pt-rank{width:24px;height:24px;display:flex;align-items:center;justify-content:center;border-radius:50%;font-size:11px;font-weight:600;color:#fff;flex-shrink:0;}
+    .pt-rank.rank-1{background:#d4af37;}
+    .pt-rank.rank-2{background:#b0b8c4;}
+    .pt-rank.rank-3{background:#cd7f32;}
+    .pt-rank.rank-4{background:#4b5563;}
     .player-subtitle{font-size:11px;font-weight:500;color:var(--tx3);text-transform:uppercase;letter-spacing:.03em;margin:10px 0 4px;}
     .player-pick-row{display:flex;justify-content:space-between;align-items:center;font-size:12px;padding:2px 0;}
     .player-pick-row .pp-label{color:var(--tx3);}
@@ -1365,13 +1368,12 @@ function renderAllTime() {
   document.getElementById('alltime-countries').innerHTML = players.length ? players.map(p=>{
     const color = playerCardColor(p.name);
     const tournRows = p.tournaments.map(t=>{
-      const isTitle = t.rank===1;
       return `<div class="player-tourn-row">
         <div class="pt-info">
           <div class="pt-tournament">${t.label}</div>
           <div class="pt-team">${t.teamName}${t.partner?` · with ${t.partner}`:''}</div>
         </div>
-        <div class="pt-rank${isTitle?' title':''}">#${t.rank}/${t.of}</div>
+        <div class="pt-rank rank-${t.rank}">${t.rank}</div>
       </div>`;
     }).join('');
 
@@ -1397,9 +1399,9 @@ function renderAllTime() {
         return `<div class="player-pick-row"><span>${flag(pick.country)} ${pick.country} <span class="pp-label">(${pick.tournament})</span></span>${move}</div>`;
       };
       bestWorstHTML = `
-        <div class="player-subtitle">Top 3 best picks</div>
+        <div class="player-subtitle" style="color:${color}">Top 3 best picks</div>
         ${best.map(valueRow).join('')}
-        <div class="player-subtitle">Top 3 worst picks</div>
+        <div class="player-subtitle" style="color:${color}">Top 3 worst picks</div>
         ${worst.map(valueRow).join('')}`;
     }
 
@@ -1411,7 +1413,7 @@ function renderAllTime() {
       ${recordHTML}
       <div class="player-tourn-list">${tournRows}</div>
       ${bestWorstHTML}
-      <div class="player-subtitle">Favorite Teams</div>
+      <div class="player-subtitle" style="color:${color}">Favorite Teams</div>
       ${picksHTML}
     </div>`;
   }).join('') : '<div class="loading">No data yet</div>';
