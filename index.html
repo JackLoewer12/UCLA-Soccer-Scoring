@@ -322,6 +322,10 @@
     </div>
 
     <div id="alltime-sub-draft" class="subsection">
+      <div class="section-title" style="margin-top:0">Overlooked teams</div>
+      <div id="alltime-overlooked"></div>
+      <div class="section-title">Overhyped teams</div>
+      <div id="alltime-overhyped"></div>
       <div class="section-title">Luckiest countries</div>
       <div id="alltime-luckiest"></div>
     </div>
@@ -1365,6 +1369,25 @@ function computeLuckiestCountries() {
   return Object.entries(counts).sort((a,b)=>b[1]-a[1] || a[0].localeCompare(b[0]));
 }
 
+// Average Draft Value for each country across all tournaments. A positive delta
+// means it finished higher than its original draft position; negative means it
+// finished lower. Averaging lets repeat appearances be compared fairly.
+function computeCountryDraftValue() {
+  const values = {};
+  (allTimeData||[]).forEach(({teams})=>{
+    teams.forEach(team => (team.countryPts||[]).forEach(({country, pick, finishRank}) => {
+      if (!Number.isFinite(pick) || !Number.isFinite(finishRank)) return;
+      if (!values[country]) values[country] = {country, totalDelta:0, appearances:0};
+      values[country].totalDelta += pick - finishRank;
+      values[country].appearances++;
+    }));
+  });
+  return Object.values(values).map(value => ({
+    ...value,
+    averageDelta: value.totalDelta / value.appearances,
+  }));
+}
+
 function renderAllTime() {
   if (!allTimeData) return;
   const failed = allTimeData.filter(t=>t.error).map(t=>t.cfg.label);
@@ -1495,6 +1518,31 @@ function renderAllTime() {
   const worstPerformance = [...performances].sort((a,b)=>a.zScore-b.zScore || a.total-b.total)[0];
   document.getElementById('alltime-best-performance').innerHTML = performanceCard(bestPerformance, 'best');
   document.getElementById('alltime-worst-performance').innerHTML = performanceCard(worstPerformance, 'worst');
+
+  // ── Draft Statistics: average draft value ──
+  const countryDraftValue = computeCountryDraftValue();
+  const overlooked = [...countryDraftValue]
+    .filter(country => country.averageDelta > 0)
+    .sort((a,b)=>b.averageDelta-a.averageDelta || b.appearances-a.appearances || a.country.localeCompare(b.country))
+    .slice(0,10);
+  const overhyped = [...countryDraftValue]
+    .filter(country => country.averageDelta < 0)
+    .sort((a,b)=>a.averageDelta-b.averageDelta || b.appearances-a.appearances || a.country.localeCompare(b.country))
+    .slice(0,10);
+  const draftValueRows = (countries, direction) => countries.length
+    ? `<div class="nation-table">${countries.map((country,index)=>{
+        const movement = `${direction==='up'?'▲':'▼'} ${Math.abs(country.averageDelta).toFixed(1)}`;
+        return `<div class="nation-row">
+          <div class="nation-rank">${index+1}</div>
+          <div class="nation-flag">${flag(country.country)}</div>
+          <div class="nation-name">${country.country}</div>
+          <div class="nation-team">${country.appearances} tournament${country.appearances===1?'':'s'}</div>
+          <div class="perf-move ${direction==='up'?'up':'down'}">${movement}</div>
+        </div>`;
+      }).join('')}</div>`
+    : '<div style="padding:14px;font-size:13px;color:var(--tx3);text-align:center">No draft-value data yet</div>';
+  document.getElementById('alltime-overlooked').innerHTML = draftValueRows(overlooked, 'up');
+  document.getElementById('alltime-overhyped').innerHTML = draftValueRows(overhyped, 'down');
 
   // ── Draft Statistics: luckiest countries ──
   const luckiest = computeLuckiestCountries().slice(0,10);
