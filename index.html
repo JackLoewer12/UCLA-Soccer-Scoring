@@ -173,11 +173,13 @@
     .pt-info{flex:1;min-width:0;}
     .pt-tournament{font-size:12px;font-weight:500;}
     .pt-team{font-size:11px;color:var(--tx3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-top:1px;}
-    .pt-rank{width:24px;height:24px;display:flex;align-items:center;justify-content:center;border-radius:50%;font-size:11px;font-weight:600;color:#fff;flex-shrink:0;}
-    .pt-rank.rank-1{background:#d4af37;}
-    .pt-rank.rank-2{background:#b0b8c4;}
-    .pt-rank.rank-3{background:#cd7f32;}
-    .pt-rank.rank-4{background:#4b5563;}
+    .pt-rank,.placement-medal{width:24px;height:24px;align-items:center;justify-content:center;border-radius:50%;font-size:11px;font-weight:600;color:#fff;}
+    .pt-rank{display:flex;flex-shrink:0;}
+    .placement-medal{display:inline-flex;vertical-align:middle;margin-left:4px;}
+    .pt-rank.rank-1,.placement-medal.rank-1{background:#d4af37;}
+    .pt-rank.rank-2,.placement-medal.rank-2{background:#b0b8c4;}
+    .pt-rank.rank-3,.placement-medal.rank-3{background:#cd7f32;}
+    .pt-rank.rank-4,.placement-medal.rank-4{background:#4b5563;}
     .player-subtitle{font-size:11px;font-weight:500;color:var(--tx3);text-transform:uppercase;letter-spacing:.03em;margin:10px 0 4px;}
     .player-pick-row{display:flex;justify-content:space-between;align-items:center;font-size:12px;padding:2px 0;}
     .player-pick-row .pp-label{color:var(--tx3);}
@@ -302,6 +304,7 @@
     <div class="tabs" id="alltime-subtabs" style="margin-bottom:1.5rem">
       <button class="tab active" onclick="showAllTimeTab('history',this)">Player History</button>
       <button class="tab" onclick="showAllTimeTab('tournaments',this)">Tournament Statistics</button>
+      <button class="tab" onclick="showAllTimeTab('draft',this)">Draft Statistics</button>
     </div>
 
       <div id="alltime-sub-history" class="subsection active">
@@ -316,6 +319,9 @@
       <div id="alltime-best-performance"></div>
       <div class="section-title">Worst performance of all time</div>
       <div id="alltime-worst-performance"></div>
+    </div>
+
+    <div id="alltime-sub-draft" class="subsection">
       <div class="section-title">Luckiest countries</div>
       <div id="alltime-luckiest"></div>
     </div>
@@ -1429,10 +1435,11 @@ function renderAllTime() {
     if (tb!==ta) return tb-ta;
     return b.totalPoints-a.totalPoints; // hidden tiebreak only, not displayed
   });
+  const placementMedal = rank => `<span class="placement-medal rank-${rank}">${rank}</span>`;
   document.getElementById('alltime-leaderboard').innerHTML = byTitles.length ? byTitles.map((p,rank)=>{
     const rc=rank===0?'r1':rank===1?'r2':rank===2?'r3':'';
     const titles = p.tournaments.filter(t=>t.rank===1).length;
-    const perT = p.tournaments.map(t=>`<span class="pill">${t.label} <strong>#${t.rank}</strong>/${t.of}</span>`).join('');
+    const perT = p.tournaments.map(t=>`<span class="pill">${t.label}${placementMedal(t.rank)}</span>`).join('');
     return `<div class="lb-card ${rc}">
       <div class="lb-row">
         <div class="rnk">${rank+1}</div>
@@ -1480,7 +1487,7 @@ function renderAllTime() {
         </div>
         <div class="tpts" style="color:${accent}">${score} <span>z-score</span></div>
       </div>
-      <div class="pills"><span class="pill"><strong>${performance.total}</strong> pts</span><span class="pill">Finished <strong>#${performance.rank}</strong>/${performance.of}</span></div>
+      <div class="pills"><span class="pill"><strong>${performance.total}</strong> pts</span><span class="pill">Finished${placementMedal(performance.rank)}</span></div>
     </div>`;
   }
 
@@ -1489,7 +1496,7 @@ function renderAllTime() {
   document.getElementById('alltime-best-performance').innerHTML = performanceCard(bestPerformance, 'best');
   document.getElementById('alltime-worst-performance').innerHTML = performanceCard(worstPerformance, 'worst');
 
-  // ── Tournament Statistics: luckiest countries ──
+  // ── Draft Statistics: luckiest countries ──
   const luckiest = computeLuckiestCountries().slice(0,10);
   document.getElementById('alltime-luckiest').innerHTML = luckiest.length
     ? `<div class="nation-table">${luckiest.map(([country,n],i)=>`
