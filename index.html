@@ -301,7 +301,7 @@
 
     <div class="tabs" id="alltime-subtabs" style="margin-bottom:1.5rem">
       <button class="tab active" onclick="showAllTimeTab('history',this)">Player History</button>
-      <button class="tab" onclick="showAllTimeTab('tournaments',this)">Tournaments Through the Years</button>
+      <button class="tab" onclick="showAllTimeTab('tournaments',this)">Tournament Statistics</button>
     </div>
 
       <div id="alltime-sub-history" class="subsection active">
@@ -312,6 +312,10 @@
     <div id="alltime-sub-tournaments" class="subsection">
       <div class="section-title" style="margin-top:0">All-Time Leaderboard</div>
       <div id="alltime-leaderboard"><div class="loading">Loading…</div></div>
+      <div class="section-title">Best performance of all time</div>
+      <div id="alltime-best-performance"></div>
+      <div class="section-title">Worst performance of all time</div>
+      <div id="alltime-worst-performance"></div>
       <div class="section-title">Luckiest countries</div>
       <div id="alltime-luckiest"></div>
     </div>
@@ -1418,7 +1422,7 @@ function renderAllTime() {
     </div>`;
   }).join('') : '<div class="loading">No data yet</div>';
 
-  // ── Tournaments Through the Years: All-Time Leaderboard, ranked by titles ──
+  // ── Tournament Statistics: All-Time Leaderboard, ranked by titles ──
   const byTitles = [...players].sort((a,b)=>{
     const ta = a.tournaments.filter(t=>t.rank===1).length;
     const tb = b.tournaments.filter(t=>t.rank===1).length;
@@ -1442,7 +1446,50 @@ function renderAllTime() {
     </div>`;
   }).join('') : '<div class="loading">No data yet</div>';
 
-  // ── Tournaments Through the Years: luckiest countries ──
+  // Compare final roster totals within each tournament. Standardizing by that
+  // tournament's mean and standard deviation makes differently scored events
+  // directly comparable: positive is an exceptional finish, negative is poor.
+  const performances = (allTimeData||[]).flatMap(({cfg, teams}) => {
+    if (!teams.length) return [];
+    const totals = teams.map(t => t.total);
+    const mean = totals.reduce((sum, total) => sum + total, 0) / totals.length;
+    const variance = totals.reduce((sum, total) => sum + Math.pow(total - mean, 2), 0) / totals.length;
+    const standardDeviation = Math.sqrt(variance);
+    if (standardDeviation === 0) return [];
+    return teams.map((team, index) => ({
+      tournament: cfg.label,
+      teamName: team.name,
+      members: team.members,
+      total: team.total,
+      rank: index + 1,
+      of: teams.length,
+      zScore: (team.total - mean) / standardDeviation,
+    }));
+  });
+
+  function performanceCard(performance, type) {
+    if (!performance) return '<div style="padding:14px;font-size:13px;color:var(--tx3);text-align:center">No completed tournament data yet</div>';
+    const score = `${performance.zScore >= 0 ? '+' : ''}${performance.zScore.toFixed(2)}`;
+    const accent = type === 'best' ? '#2d6a4f' : '#ef4444';
+    return `<div class="lb-card" style="border-left:3px solid ${accent}">
+      <div class="lb-row">
+        <div class="rnk">#${performance.rank}</div>
+        <div>
+          <div class="tname">${performance.teamName}</div>
+          <div class="tmems">${performance.members} · ${performance.tournament}</div>
+        </div>
+        <div class="tpts" style="color:${accent}">${score} <span>z-score</span></div>
+      </div>
+      <div class="pills"><span class="pill"><strong>${performance.total}</strong> pts</span><span class="pill">Finished <strong>#${performance.rank}</strong>/${performance.of}</span></div>
+    </div>`;
+  }
+
+  const bestPerformance = [...performances].sort((a,b)=>b.zScore-a.zScore || b.total-a.total)[0];
+  const worstPerformance = [...performances].sort((a,b)=>a.zScore-b.zScore || a.total-b.total)[0];
+  document.getElementById('alltime-best-performance').innerHTML = performanceCard(bestPerformance, 'best');
+  document.getElementById('alltime-worst-performance').innerHTML = performanceCard(worstPerformance, 'worst');
+
+  // ── Tournament Statistics: luckiest countries ──
   const luckiest = computeLuckiestCountries().slice(0,10);
   document.getElementById('alltime-luckiest').innerHTML = luckiest.length
     ? `<div class="nation-table">${luckiest.map(([country,n],i)=>`
